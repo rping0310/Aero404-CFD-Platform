@@ -1,0 +1,25 @@
+[Unit]
+Description=Aero404 CFD Platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Change these three paths (and User) to match your machine:
+User=user
+WorkingDirectory=/home/user/aero404_cfd_platform
+Environment=CFD_PLATFORM_DATA_DIR=/home/user/aero404_cfd_platform/data
+Environment=DISPLAY=
+ExecStart=/home/user/aero404_cfd_platform/venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8080
+Restart=always
+RestartSec=3
+# IMPORTANT: jobs on the local server are child processes of this service. The default
+# (KillMode=control-group) would kill every running STAR-CCM+ job on `systemctl restart`.
+# With KillMode=process only the web service is stopped; running jobs survive and are
+# re-adopted by the platform after it starts again.
+KillMode=process
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

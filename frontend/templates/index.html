@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Aero404 CFD Platform</title>
+  <link rel="icon" href="/static/img/favicon.png">
+  <link rel="stylesheet" href="/static/css/style.css">
+
+  <!-- Register this as early as possible: script load-error events don't
+       bubble, so this capture-phase listener must be registered before any
+       other script tag or it could miss a failure. Must stay pure inline,
+       no external dependency of its own. -->
+  <script>
+    window.__bootErrors = [];
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target.tagName === 'SCRIPT') {
+        window.__bootErrors.push(e.target.src || '(inline script)');
+      }
+    }, true);
+  </script>
+
+  <!-- Local vendor files only, no external CDN (this often runs on an
+       internal network with no route to the public internet).
+       Load order matters:
+         1) plotly / three / STLLoader (STLLoader attaches to the global
+            THREE, so it must come after three.min.js)
+         2) app.js — defines window.platform()
+         3) alpine.min.js last — Alpine auto-initializes x-data="platform()"
+            as soon as it runs; if it ran before app.js, platform() would
+            not exist yet and the whole page would stay hidden behind
+            x-cloak/x-show with no visible error at all.
+       All four use defer: deferred scripts execute in document order once
+       parsing finishes, so this ordering is what guarantees platform()
+       exists before Alpine starts. -->
+  <script defer src="/static/vendor/plotly.min.js"></script>
+  <script defer src="/static/vendor/three.min.js"></script>
+  <script defer src="/static/vendor/STLLoader.js"></script>
+  <script defer src="/static/js/app.js"></script>
+  <script defer src="/static/vendor/alpine.min.js"></script>
+</head>
+<body x-data="platform()" x-init="init()">
+
+  <!-- ================= boot failure banner =================
+       Deliberately outside Alpine's control (no x-show/x-cloak) so the
+       watchdog script at the bottom of the page can still reveal it even
+       if Alpine never started at all. -->
+  <div id="boot-error" class="boot-error" style="display:none">
+    <div class="boot-error-inner">
+      <h2>⚠️ Front-end assets failed to load</h2>
+      <p id="boot-error-detail">Some JavaScript files did not load correctly; the page may not work properly.</p>
+      <p class="boot-error-hint">Open the browser console (F12) for details, or ask an administrator to check
+        that <code>frontend/static/vendor/</code> and <code>frontend/static/js/app.js</code> exist on the server.</p>
+    </div>
+  </div>
+
+  <!-- ================= Login ================= -->
+  <main class="login" x-show="!user" x-cloak>
+    <form class="card" @submit.prevent="login()">
+      <img src="/static/img/favicon.png" alt="Aero404">
+      <h1>Aero404 CFD Platform</h1>
+      <label>Name <input x-model="loginForm.name" required autofocus></label>
+      <label>Password <input x-model="loginForm.password" type="password" required></label>
+      <button class="primary" type="submit">Log In</button>
+      <p class="error" x-text="error"></p>
+    </form>
+  </main>
+
+  <!-- ================= Main app ================= -->
+  <div class="app-shell" x-show="user" x-cloak>
+
+    <div class="titlebar">
+      <img src="/static/img/favicon.png" alt="">
+      <span class="name">Aero404 CFD Platform</span>
+      <span class="spacer"></span>
+      <span class="session" x-text="user && `${user.name} · ${user.role}`"></span>
+      <button @click="logout()">Log Out</button>
+    </div>
+
+    <nav class="tabbar">
+      <template x-for="item in tabs" :key="item.id">
+        <button x-show="item.id!=='settings' || user?.role==='admin'"
+                :class="{active: tab === item.id}" @click="selectTab(item.id)">
+          <span class="icon" x-text="item.icon"></span>
+          <span x-text="item.label"></span>
+        </button>
+      </template>
+    </nav>
+
+    <main class="page">
+
+      <!-- ---------------- Case List ---------------- -->
+      <section x-show="tab==='cases'" class="page" style="padding:0">
+        <div class="panel-title">
+          <h2>Case List</h2>
+          <div class="actions">
+            <span class="readonly-note" x-show="mainCase || subCase">
+              Main: <b x-text="mainCase || '—'"></b> &nbsp; Sub: <b x-text="subCase || '—'"></b>
+            </span>
+            <button @click="loadCases()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="chips">
+            <template x-for="f in ['Straight','Yaw','Cornering']" :key="f">
+              <span class="chip" :class="{active: caseFolderFilter===f}" @click="caseFolderFilter=f" x-text="f"></span>
+            </template>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="checkbox-col"></th>
+                <th @click="sortBy('name')">Case Name <span class="arrow" x-text="sortArrow('name')"></span></th>
+                <th @click="sortBy('folder')">Type <span class="arrow" x-text="sortArrow('folder')"></span></th>
+                <template x-for="key in resultKeys" :key="key">
+                  <th @click="sortBy(key)" x-text="humanizeKey(key)"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="c in sortedCases()" :key="c.name">
+                <tr :class="{'is-main': c.name===mainCase, 'is-sub': c.name===subCase}"
+                    @click="toggleSelect(c.name)">
+                  <td class="checkbox-col" @click.stop>
+                    <input type="checkbox" :checked="selected.includes(c.name)" @change="toggleSelect(c.name)">
+                  </td>
+                  <td>
+                    <span x-text="c.name"></span>
+                    <span class="badge main" x-show="c.name===mainCase">MAIN</span>
+                    <span class="badge sub" x-show="c.name===subCase">SUB</span>
+                  </td>
+                  <td x-text="c.folder"></td>
+                  <template x-for="key in resultKeys" :key="key">
+                    <td x-text="formatResultValue(c.result[key])"></td>
+                  </template>
+                </tr>
+              </template>
+              <tr x-show="filteredCases().length===0"><td :colspan="3+resultKeys.length" style="text-align:center;color:var(--text-muted);padding:2rem">No cases found in this folder</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="toolbar-bottom">
+          <button class="primary" :disabled="!selected.length" @click="loadAsMain()">📌 Load as Main</button>
+          <button :disabled="!selected.length" @click="loadAsSub()">Load as Sub</button>
+          <button :disabled="!subCase" @click="subCase=''">✕ Clear Sub</button>
+          <button @click="loadCases()">↻ Refresh</button>
+        </div>
+        <div class="status-bar">
+          <span>Found <b x-text="filteredCases().length"></b> cases</span>
+          <span x-show="selected.length">Selected <b x-text="selected.length"></b></span>
+        </div>
+      </section>
+
+      <!-- ---------------- Slices ---------------- -->
+      <section x-show="tab==='slices'" class="page" style="padding:0">
+        <div class="panel-title wrap-title">
+          <h2>Slices</h2>
+          <div class="inline-sync">
+            <label><input type="checkbox" x-model="syncSliceType" style="width:auto"> Sync Slice Type</label>
+            <label><input type="checkbox" x-model="syncSlicePosition" style="width:auto"> Sync Slice Position</label>
+            <label><input type="checkbox" x-model="syncZoom" style="width:auto"> Sync Zoom</label>
+          </div>
+          <span class="readonly-note">Main: <b x-text="mainCase||'—'"></b> / Sub: <b x-text="subCase||'—'"></b></span>
+        </div>
+
+        <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
+
+          <!-- ===== Main pane ===== -->
+          <div class="compare-pane">
+            <div class="pane-head">
+              <span class="role main">Main Case · <span x-text="mainCase||'not selected'"></span></span>
+              <label class="pane-head-select">Slice Type:
+                <select x-model="sliceTypeMain" @change="onSliceTypeChange('main')" :disabled="!mainCase">
+                  <option value="" x-show="!sliceTypesMain.length">(no folders available)</option>
+                  <template x-for="t in sliceTypesMain" :key="t"><option :value="t" x-text="t"></option></template>
+                </select>
+              </label>
+            </div>
+            <div id="slice-viewport-main" class="slice-viewport"
+                 @wheel.prevent="zoomWheel('main',$event)"
+                 @mousedown="panStart('main',$event)" @mousemove="panMove($event)"
+                 @mouseup="panEnd()" @mouseleave="panEnd()">
+              <img x-show="sliceUrl('main')" :src="sliceUrl('main')" :style="sliceImgStyle('main')">
+              <div class="slice-empty" x-show="!sliceUrl('main')">No image loaded</div>
+            </div>
+            <div class="play-controls">
+              <button class="icon-btn" @click="stepFrame('main',-1)" title="Previous frame (J)">⏮</button>
+              <button class="icon-btn" :class="{active: playDirectionMain===-1}" @click="togglePlay('main',-1)" title="Reverse">◀</button>
+              <button class="icon-btn" :class="{active: playDirectionMain===1}" @click="togglePlay('main',1)" title="Play (space)">▶</button>
+              <button class="icon-btn" @click="stepFrame('main',1)" title="Next frame (L)">⏭</button>
+              <input type="range" min="0" :max="Math.max(0, maxFrameCount('main')-1)" :value="sliceIndexMain" @input="setFrame('main',$event.target.value)">
+              <span class="frame-counter" x-text="`${sliceIndexMain+1}/${maxFrameCount('main')||0}`"></span>
+              <select x-model.number="playSpeedMain" style="width:auto;min-width:70px">
+                <option :value="0.5">0.5x</option><option :value="1">1x</option>
+                <option :value="2">2x</option><option :value="4">4x</option>
+              </select>
+              <span class="spacer" style="flex:1"></span>
+              <button class="icon-btn" @click="zoomButton('main',0.83)">−</button>
+              <span x-text="Math.round(zoomMain*100)+'%'" style="min-width:3.4rem;text-align:center"></span>
+              <button class="icon-btn" @click="zoomButton('main',1.2)">+</button>
+              <button @click="resetView('main')">Reset</button>
+            </div>
+            <div class="mini-info">
+              <div class="mini-table">
+                <h4>Parameters</h4>
+                <table><tbody>
+                  <template x-for="(v,k) in paramsMain" :key="k"><tr><td x-text="k"></td><td x-text="v"></td></tr></template>
+                </tbody></table>
+              </div>
+              <div class="mini-table">
+                <h4>Results</h4>
+                <table><tbody>
+                  <template x-for="(v,k) in resultMain" :key="k"><tr><td x-text="k"></td><td x-text="v"></td></tr></template>
+                </tbody></table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Sub pane ===== -->
+          <div class="compare-pane" x-show="subCase" x-cloak>
+            <div class="pane-head">
+              <span class="role sub">Sub Case · <span x-text="subCase||'not selected'"></span></span>
+              <label class="pane-head-select">Slice Type:
+                <select x-model="sliceTypeSub" @change="onSliceTypeChange('sub')" :disabled="!subCase || syncSliceType">
+                  <option value="" x-show="!sliceTypesSub.length">(no folders available)</option>
+                  <template x-for="t in sliceTypesSub" :key="t"><option :value="t" x-text="t"></option></template>
+                </select>
+              </label>
+            </div>
+            <div id="slice-viewport-sub" class="slice-viewport"
+                 @wheel.prevent="zoomWheel('sub',$event)"
+                 @mousedown="panStart('sub',$event)" @mousemove="panMove($event)"
+                 @mouseup="panEnd()" @mouseleave="panEnd()">
+              <img x-show="sliceUrl('sub')" :src="sliceUrl('sub')" :style="sliceImgStyle('sub')">
+              <div class="slice-empty" x-show="!sliceUrl('sub')">No image loaded</div>
+            </div>
+            <div class="play-controls">
+              <button class="icon-btn" @click="stepFrame('sub',-1)" title="Previous frame">⏮</button>
+              <button class="icon-btn" :class="{active: playDirectionSub===-1}" @click="togglePlay('sub',-1)" title="Reverse" :disabled="syncSlicePosition">◀</button>
+              <button class="icon-btn" :class="{active: playDirectionSub===1}" @click="togglePlay('sub',1)" title="Play" :disabled="syncSlicePosition">▶</button>
+              <button class="icon-btn" @click="stepFrame('sub',1)" title="Next frame">⏭</button>
+              <input type="range" min="0" :max="Math.max(0, maxFrameCount('sub')-1)" :value="sliceIndexSub" @input="setFrame('sub',$event.target.value)" :disabled="syncSlicePosition">
+              <span class="frame-counter" x-text="`${sliceIndexSub+1}/${maxFrameCount('sub')||0}`"></span>
+              <select x-model.number="playSpeedSub" style="width:auto;min-width:70px">
+                <option :value="0.5">0.5x</option><option :value="1">1x</option>
+                <option :value="2">2x</option><option :value="4">4x</option>
+              </select>
+              <span class="spacer" style="flex:1"></span>
+              <button class="icon-btn" @click="zoomButton('sub',0.83)" :disabled="syncZoom">−</button>
+              <span x-text="Math.round(zoomSub*100)+'%'" style="min-width:3.4rem;text-align:center"></span>
+              <button class="icon-btn" @click="zoomButton('sub',1.2)" :disabled="syncZoom">+</button>
+              <button @click="resetView('sub')">Reset</button>
+            </div>
+            <div class="mini-info">
+              <div class="mini-table">
+                <h4>Parameters</h4>
+                <table><tbody>
+                  <template x-for="(v,k) in paramsSub" :key="k"><tr><td x-text="k"></td><td x-text="v"></td></tr></template>
+                </tbody></table>
+              </div>
+              <div class="mini-table">
+                <h4>Results</h4>
+                <table><tbody>
+                  <template x-for="(v,k) in resultSub" :key="k"><tr><td x-text="k"></td><td x-text="v"></td></tr></template>
+                </tbody></table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ---------------- Plots ---------------- -->
+      <section x-show="tab==='plots'" class="page" style="padding:0">
+        <div class="panel-title wrap-title">
+          <h2>Plots</h2>
+          <select x-model="selectedCsv" @change="drawPlots()" style="width:auto;min-width:220px">
+            <template x-for="f in csvFiles" :key="f"><option :value="f" x-text="f"></option></template>
+          </select>
+          <button @click="loadCsvFiles()">↻ Refresh CSV List</button>
+          <span class="readonly-note">Main: <b x-text="mainCase||'—'"></b> / Sub: <b x-text="subCase||'—'"></b></span>
+        </div>
+
+        <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
+          <div class="compare-pane">
+            <div class="pane-head"><span class="role main">Main · <span x-text="mainCase||'not selected'"></span></span></div>
+            <div id="plot-main" class="plot-host"></div>
+            <div class="series-list" x-show="plotSeriesNamesMain.length">
+              <h4>Visible Series</h4>
+              <template x-for="name in plotSeriesNamesMain" :key="name">
+                <label class="series-toggle">
+                  <input type="checkbox" :checked="plotVisibleSeriesMain[name]!==false" @change="toggleSeriesVisible('main', name)">
+                  <span x-text="name"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+          <div class="compare-pane" x-show="subCase" x-cloak>
+            <div class="pane-head"><span class="role sub">Sub · <span x-text="subCase||'not selected'"></span></span></div>
+            <div id="plot-sub" class="plot-host"></div>
+            <div class="series-list" x-show="plotSeriesNamesSub.length">
+              <h4>Visible Series</h4>
+              <template x-for="name in plotSeriesNamesSub" :key="name">
+                <label class="series-toggle">
+                  <input type="checkbox" :checked="plotVisibleSeriesSub[name]!==false" @change="toggleSeriesVisible('sub', name)">
+                  <span x-text="name"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------- 3D ---------------- -->
+      <section x-show="tab==='3d'" class="page" style="padding:0">
+        <div class="panel-title">
+          <h2>3D · q-criterion.stl</h2>
+          <div class="actions">
+            <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.82rem;color:var(--text-muted)">
+              <input type="checkbox" x-model="syncCamera" style="width:auto"> Sync Camera View
+            </label>
+          </div>
+        </div>
+        <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
+          <div class="compare-pane">
+            <div class="pane-head">
+              <span class="role main">Main · <span x-text="mainCase||'not selected'"></span></span>
+              <button class="icon-btn quiet" @click="resetStlView('main')" x-show="threeScenes.main?.mesh">↺ Reset View</button>
+            </div>
+            <div id="stl-main" class="stl-host">
+              <div id="stl-main-canvas" class="stl-canvas-slot"></div>
+              <div class="stl-loading" x-show="stlLoading.main" x-cloak>
+                <div class="spinner"></div>
+                <span>Loading model…</span>
+              </div>
+              <div class="stl-empty" x-show="!stlLoading.main && !mainCase">No case selected</div>
+              <div class="stl-empty" x-show="!stlLoading.main && stlError.main" x-text="stlError.main"></div>
+            </div>
+          </div>
+          <div class="compare-pane" x-show="subCase" x-cloak>
+            <div class="pane-head">
+              <span class="role sub">Sub · <span x-text="subCase||'not selected'"></span></span>
+              <button class="icon-btn quiet" @click="resetStlView('sub')" x-show="threeScenes.sub?.mesh">↺ Reset View</button>
+            </div>
+            <div id="stl-sub" class="stl-host">
+              <div id="stl-sub-canvas" class="stl-canvas-slot"></div>
+              <div class="stl-loading" x-show="stlLoading.sub" x-cloak>
+                <div class="spinner"></div>
+                <span>Loading model…</span>
+              </div>
+              <div class="stl-empty" x-show="!stlLoading.sub && stlError.sub" x-text="stlError.sub"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------- Job Session ---------------- -->
+      <section x-show="tab==='jobs'" class="page" style="padding:0">
+        <div class="panel-title">
+          <h2>Job Session</h2>
+          <div class="actions">
+            <button x-show="user?.role==='admin'" @click="clearFailedJobs()">🗑️ Clear All FAILED</button>
+            <button @click="openWaitingList()">📋 Waiting List</button>
+            <button @click="refreshJobs()">↻ Refresh</button>
+            <button class="primary" x-show="user?.role!=='visitor'" @click="openAdd()">＋ Add Case</button>
+          </div>
+        </div>
+
+        <div class="server-cards">
+          <template x-for="s in servers" :key="s.name">
+            <div class="server-card" :class="{offline: s.metrics && s.metrics.online===false}">
+              <div class="name" x-text="s.name"></div>
+              <div class="cores" x-text="`${s.available_cores} / ${s.total_cores} cores`"></div>
+              <div class="cpu" x-text="s.metrics && s.metrics.cpu_percent!=null ? `CPU ${s.metrics.cpu_percent}%` : 'CPU —'"></div>
+            </div>
+          </template>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Case</th><th>Type</th><th>Server</th><th>Status</th>
+                <th>Cores</th><th>CLA</th><th>Z Balance</th><th>By</th><th>Note</th><th>Date</th><th>Runtime</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(j,i) in jobsPaged()" :key="j.id">
+                <tr>
+                  <td x-text="(jobPageSize==='all' ? 0 : (jobPage-1)*jobPageSize) + i + 1"></td>
+                  <td x-text="j.case_name"></td>
+                  <td x-text="typeLabel(j)"></td>
+                  <td x-text="j.server_name"></td>
+                  <td>
+                    <span class="status-chip" :class="j.status.toLowerCase()" :title="j.error_message || ''" x-text="j.status"></span>
+                    <div class="fail-reason" x-show="j.status==='FAILED' && j.error_message" x-text="j.error_message"></div>
+                  </td>
+                  <td x-text="j.cores_allocated ?? '—'"></td>
+                  <td x-text="formatResultValue(caseResultValue(j.case_name, 'mean_Cla'))"></td>
+                  <td x-text="formatResultValue(caseResultValue(j.case_name, 'Aero_balance_z'))"></td>
+                  <td x-text="j.added_by"></td>
+                  <td class="note-cell" @click="openNoteModal(j)" :title="j.note || ''">
+                    <span x-show="!j.note" class="note-empty">+ note</span>
+                    <span x-show="j.note && noteIsShort(j.note)" x-text="j.note"></span>
+                    <span x-show="j.note && !noteIsShort(j.note)" x-text="(j.note||'').slice(0,32)+'…'"></span>
+                  </td>
+                  <td x-text="formatDate(j.created_at)"></td>
+                  <td x-text="formatRuntime(j.runtime_seconds)"></td>
+                  <td style="white-space:nowrap">
+                    <button class="icon-btn quiet" x-show="j.status!=='WAITING'" @click="openLog(j)" title="View workflow.log">📄</button> <!-- LOGKILL_PATCH -->
+                    <button class="danger" x-show="user?.role==='admin' && j.status==='SOLVING'" @click="killJob(j.id)">Kill</button>
+                    <button class="icon-btn quiet" x-show="user?.role==='admin' && (j.status==='DONE' || j.status==='FAILED')"
+                            @click="deleteJobRecord(j.id)" title="Permanently delete this record">🗑️</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="jobs.length===0"><td colspan="13" style="text-align:center;color:var(--text-muted);padding:2rem">No jobs yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="status-bar">
+          <span>Total <b x-text="jobs.length"></b> job(s)</span>
+          <span class="spacer" style="flex:1"></span>
+          <label style="display:flex;align-items:center;gap:0.3rem">
+            Per page:
+            <select style="width:auto;min-width:70px" :value="jobPageSize" @change="changeJobPageSize($event.target.value)">
+              <option value="30">30</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <span x-show="jobPageSize!=='all'" style="display:flex;align-items:center;gap:0.4rem">
+            <button class="icon-btn quiet" @click="goToJobPage(-1)" :disabled="jobPage<=1">‹</button>
+            <span x-text="`${jobPage} / ${jobTotalPages()}`"></span>
+            <button class="icon-btn quiet" @click="goToJobPage(1)" :disabled="jobPage>=jobTotalPages()">›</button>
+          </span>
+        </div>
+      </section>
+
+      <!-- ---------------- Settings (admin only) ---------------- -->
+      <section x-show="tab==='settings' && user?.role==='admin'" class="page" style="padding:0">
+        <div class="panel-title">
+          <h2>Settings</h2>
+          <button class="primary" @click="saveSettings()">💾 Save</button>
+        </div>
+        <div class="settings-grid">
+          <div class="settings-block">
+            <h3>case_parameter_default.dat</h3>
+            <textarea class="json short" x-model="defaultsText"></textarea>
+          </div>
+        </div>
+
+        <div class="panel-title" style="margin-top:1.2rem">
+          <h2>Login Log</h2>
+          <button @click="loadLoginLog()">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Name</th><th>IP</th><th>Result</th></tr></thead>
+            <tbody>
+              <template x-for="e in loginLog" :key="e.time+e.ip+e.name">
+                <tr>
+                  <td x-text="e.time"></td>
+                  <td x-text="e.name"></td>
+                  <td x-text="e.ip"></td>
+                  <td :style="e.ok ? 'color:var(--success)' : 'color:var(--danger)'" x-text="e.ok ? 'OK' : 'FAILED'"></td>
+                </tr>
+              </template>
+              <tr x-show="loginLog.length===0"><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1.5rem">No entries</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------------- About ---------------- -->
+      <section x-show="tab==='about'" class="page">
+        <div class="about-card">
+          <img src="/static/img/favicon.png">
+          <h2>Aero404 CFD Platform</h2>
+          <p class="version-badge">Version 1.0</p>
+          <p>Web-based STAR-CCM+ job queue and CFD result viewer.</p>
+          <p>FastAPI · Alpine.js · Plotly.js · three.js</p>
+          <hr>
+          <p><b>Contributor</b>: Ping Lin</p>
+          <p><b>GitHub</b>: <a href="https://github.com/rping0310" target="_blank" rel="noopener">github.com/rping0310</a></p>
+          <p class="readonly-note">Copyright © 2026 Ping Lin · Non-Commercial Use Only</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= Add Case Modal ================= -->
+  <div class="modal-backdrop" x-show="addOpen" x-cloak @keydown.escape.window="addOpen=false">
+    <form class="modal" @submit.prevent="createJob()">
+      <div class="panel-title">
+        <h2>Add Case</h2>
+        <button type="button" class="quiet" @click="addOpen=false">✕</button>
+      </div>
+      <div class="form-grid">
+        <label>Case Name <input x-model="newJob.case_name" required></label>
+        <label>Simulation Type
+          <select x-model.number="newJob.simulation_type">
+            <option value="1">Straight</option>
+            <option value="2">Yaw</option>
+            <option value="3">Cornering</option>
+          </select>
+        </label>
+        <label>Server
+          <select x-model="newJob.server_name">
+            <template x-for="s in servers" :key="s.name">
+              <option :value="s.name" x-text="`${s.name} (${s.available_cores}/${s.total_cores})`"></option>
+            </template>
+          </select>
+        </label>
+        <label>Cores
+          <select x-model="newJob.mode">
+            <option value="half">Half</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+        <label class="wide">Parasolid Upload
+          <input type="file" accept=".x_t" @change="newJob.file=$event.target.files[0]">
+        </label>
+        <label class="wide">Note (optional)
+          <textarea x-model="newJob.note" rows="2" placeholder="Free-text note, editable later from Job Session"></textarea>
+        </label>
+      </div>
+      <h3>Case Parameters</h3>
+      <div class="param-grid">
+        <template x-for="(value,key) in newJob.parameters" :key="key">
+          <label>
+            <span x-text="key"></span>
+            <input :disabled="key==='simulation_type'" x-model="newJob.parameters[key]">
+          </label>
+        </template>
+      </div>
+      <label x-show="user?.role==='admin'" style="display:flex;align-items:center;gap:0.4rem;flex-direction:row">
+        <input type="checkbox" x-model="newJob.force" style="width:auto"> Overwrite existing case
+      </label>
+      <p class="error" x-text="error"></p>
+      <div class="modal-actions">
+        <button type="button" class="quiet" @click="addOpen=false">Cancel</button>
+        <button class="primary" type="submit">Submit</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ================= Waiting List Modal ================= -->
+  <div class="modal-backdrop" x-show="waitingOpen" x-cloak @keydown.escape.window="waitingOpen=false" @click.self="waitingOpen=false">
+    <div class="modal">
+      <div class="panel-title">
+        <h2>Waiting List</h2>
+        <button type="button" class="quiet" @click="waitingOpen=false">✕</button>
+      </div>
+      <p class="readonly-note" style="margin-top:-0.4rem">Grouped by server, ordered by current queue position.
+        <span x-show="user?.role==='admin'">Admins can click "Jump Queue" to move a case to the front.</span>
+      </p>
+
+      <template x-for="(group, serverName) in waitingByServer()" :key="serverName">
+        <div class="waiting-group">
+          <h3 x-text="serverName"></h3>
+          <div class="table-wrap" style="max-height:220px">
+            <table>
+              <thead><tr><th>#</th><th>Case</th><th>Mode</th><th>By</th><th>Date</th><th></th></tr></thead>
+              <tbody>
+                <template x-for="(j,i) in group" :key="j.id">
+                  <tr>
+                    <td x-text="i+1"></td>
+                    <td x-text="j.case_name"></td>
+                    <td x-text="j.mode"></td>
+                    <td x-text="j.added_by"></td>
+                    <td x-text="formatDate(j.created_at)"></td>
+                    <td>
+                      <button x-show="user?.role==='admin' && i>0" @click="jumpQueue(j)">⬆ Jump Queue</button>
+                      <button x-show="user?.role==='admin'" @click="deleteJobRecord(j.id)">🗑️ Delete</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+      <p class="readonly-note" x-show="Object.keys(waitingByServer()).length===0" style="text-align:center;padding:1.5rem">
+        No jobs currently WAITING
+      </p>
+
+      <div class="modal-actions">
+        <button class="primary" type="button" @click="waitingOpen=false">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Note Modal ================= -->
+  <div class="modal-backdrop" x-show="noteModalOpen" x-cloak @keydown.escape.window="noteModalOpen=false" @click.self="noteModalOpen=false">
+    <div class="modal" style="width:min(560px,96vw)">
+      <div class="panel-title">
+        <h2>Note · <span x-text="noteModalJob?.case_name"></span></h2>
+        <button type="button" class="quiet" @click="noteModalOpen=false">✕</button>
+      </div>
+      <textarea x-model="noteModalText" rows="8" :readonly="user?.role==='visitor'"
+                placeholder="No note yet"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="quiet" @click="noteModalOpen=false">Close</button>
+        <button class="primary" type="button" x-show="user?.role!=='visitor'" @click="saveNote()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Log Modal (LOGKILL_PATCH) ================= -->
+  <div class="modal-backdrop" x-show="logOpen" x-cloak @keydown.escape.window="closeLog()" @click.self="closeLog()">
+    <div class="modal" style="width:min(1400px,96vw)">
+      <div class="panel-title">
+        <h2>Log · <span x-text="logJob?.case_name"></span></h2>
+        <button type="button" class="quiet" @click="closeLog()">✕</button>
+      </div>
+      <div style="display:flex;gap:0.6rem;align-items:center;margin-bottom:0.4rem;font-size:0.85rem">
+        <label style="display:flex;align-items:center;gap:0.25rem;margin:0">
+          <input type="checkbox" x-model="logAuto" style="width:auto"> Auto
+        </label>
+        <button type="button" class="quiet" @click="refreshLog(true)" title="Refresh">↻</button>
+        <button type="button" class="quiet" @click="logGo(1)" :disabled="logCur<=1" title="First page">⏮</button>
+        <button type="button" class="quiet" @click="logGo(logCur-1)" :disabled="logCur<=1" title="Previous page (older)">◀</button>
+        <span x-text="logCur + ' / ' + logPages + '   (' + logTotal + ' lines)'" style="white-space:nowrap"></span>
+        <button type="button" class="quiet" @click="logGo(logCur+1)" :disabled="logCur>=logPages" title="Next page (newer)">▶</button>
+        <button type="button" class="quiet" @click="logGo(0)" :disabled="logPage===0" title="Last page (live)">⏭</button>
+        <span x-text="logError" style="color:#c0392b"></span>
+      </div>
+      <pre x-ref="logBox" style="height:50vh;overflow:auto;margin:0;padding:0.5rem;font-size:11.5px;line-height:1.35;white-space:pre;background:rgba(127,127,127,0.12);border-radius:6px" x-text="logText"></pre>
+      <div class="modal-actions">
+        <button type="button" class="quiet" @click="closeLog()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" x-show="message" x-cloak x-text="message"></div>
+
+  <!-- ================= init watchdog =================
+       Deliberately the LAST deferred script (after alpine.min.js), so it is
+       guaranteed to run after platform()/Alpine should already have run.
+       A short extra delay gives Alpine's async init and x-cloak removal a
+       moment to finish before checking. -->
+  <script defer>
+    setTimeout(function () {
+      var missing = [];
+      if (typeof platform !== 'function') missing.push('app.js (platform function not defined)');
+      if (typeof window.Alpine === 'undefined') missing.push('Alpine.js (window.Alpine not found)');
+
+      var loginVisible = document.querySelector('.login') && getComputedStyle(document.querySelector('.login')).display !== 'none';
+      var shellVisible = document.querySelector('.app-shell') && getComputedStyle(document.querySelector('.app-shell')).display !== 'none';
+      if (missing.length === 0 && !loginVisible && !shellVisible) {
+        missing.push('Alpine loaded, but nothing rendered (x-data init may have failed)');
+      }
+
+      if (missing.length > 0) {
+        var box = document.getElementById('boot-error');
+        var detail = document.getElementById('boot-error-detail');
+        var lines = ['Missing or failed:', ...missing];
+        if (window.__bootErrors && window.__bootErrors.length) {
+          lines.push('Failed to load:');
+          window.__bootErrors.forEach(function (src) { lines.push(' - ' + src); });
+        }
+        detail.innerHTML = lines.map(function (l) { return l.replace(/</g, '&lt;'); }).join('<br>');
+        box.style.display = 'flex';
+      }
+    }, 600);
+  </script>
+
+</body>
+</html>

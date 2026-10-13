@@ -1,0 +1,29 @@
+# Compute servers. Edit this file at any time: it is hot-reloaded (no restart needed).
+#
+# The server whose host is 127.0.0.1 / localhost / ::1 runs jobs as local processes.
+# Every other server is driven over SSH (key-based, no password prompt allowed).
+#
+# nfs_path / starccm_path are paths AS SEEN ON THAT MACHINE: the same shared NFS
+# folder may be mounted at different local paths on different machines.
+servers:
+  - name: "ServerA"                      # name shown on the website; also the machine running this platform
+    host: "127.0.0.1"                    # 127.0.0.1 = local execution
+    ssh_user: "usera"
+    ssh_port: 22
+    ssh_key_path: "~/.ssh/id_ed25519"    # unused for local execution
+    total_cores: 64
+    reserved_cores: 2                    # kept free for the OS / this service
+    nfs_path: "/home/usera/CFD_cloud_NFS"
+    starccm_path: "/home/usera/STAR-CCM+/star/bin/starccm+"
+    enabled: true
+
+  - name: "ServerB"                      # a remote worker reached over SSH
+    host: "192.0.2.20"                   # dummy documentation IP - replace with your server's IP
+    ssh_user: "userb"
+    ssh_port: 22
+    ssh_key_path: "~/.ssh/id_ed25519"    # key of the user running the platform on ServerA
+    total_cores: 32
+    reserved_cores: 4
+    nfs_path: "/home/userb/CFD_cloud_NFS"
+    starccm_path: "/home/userb/STAR-CCM+/star/bin/starccm+"
+    enabled: true

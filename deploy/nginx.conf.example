@@ -1,0 +1,20 @@
+# HTTPS reverse proxy in front of the platform (uvicorn listens on 127.0.0.1:8080).
+# Login cookies are "Secure", so use HTTPS for anything beyond http://localhost.
+# Copy to /etc/nginx/sites-available/aero404, symlink into sites-enabled, then: sudo nginx -t && sudo systemctl reload nginx
+
+server {
+    listen 6200 ssl;                         # any free port, or 443
+    server_name cfd.example.internal;        # your host name / IP
+    client_max_body_size 500m;               # >= max_upload_size_mb in app_settings.yaml
+
+    ssl_certificate     /etc/ssl/aero404/server.crt;   # see README "HTTPS" for a self-signed certificate
+    ssl_certificate_key /etc/ssl/aero404/server.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600;
+    }
+}

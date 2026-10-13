@@ -1,0 +1,9 @@
+# runtime data (accounts, queue, logs, your real server list) - never commit
+/data/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.bak*
+*.log
+.env

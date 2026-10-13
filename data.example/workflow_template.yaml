@@ -1,0 +1,36 @@
+# 新增 case 時實際執行的步驟。改這個檔案就能調整流程，不用改程式碼。
+#
+# 對照實際操作：
+#   cd ~/CFD_cloud_NFS/Straight        (依 simulation_type 決定資料夾)
+#   cp -r template_CFD TH12_002
+#   cd TH12_002
+#   mv template.sim TH12_002.sim
+#   (把上傳的 TH1X_XXX.x_t 放進來)
+#   (寫入 case_parameter.dat)
+#   starccm+ -np 31 -batch batch_run.java TH12_002.sim
+#
+# 可用的變數（執行時由程式自動代入）：
+#   {{nfs_root}} {{sim_type_folder}} {{template_folder_name}} {{case_name}}
+#   {{case_folder}} {{template_sim_filename}} {{uploaded_filename}}
+#   {{starccm_path}} {{cores}} {{entry_macro}}
+
+steps:
+  - action: copy_folder
+    source: "{{nfs_root}}/{{sim_type_folder}}/{{template_folder_name}}"
+    dest: "{{nfs_root}}/{{sim_type_folder}}/{{case_name}}"
+
+  - action: rename_file
+    source: "{{case_folder}}/{{template_sim_filename}}"
+    dest: "{{case_folder}}/{{case_name}}.sim"
+
+  - action: save_uploaded_file
+    dest: "{{case_folder}}/{{uploaded_filename}}"
+
+  - action: write_case_parameter
+    dest: "{{case_folder}}/case_parameter.dat"
+
+  - action: run_command
+    command: "{{starccm_path}} -np {{cores}} -batch {{entry_macro}} {{case_name}}.sim"
+    cwd: "{{case_folder}}"
+    log_to: "{{case_folder}}/workflow.log"
+    pid_to: "{{case_folder}}/run.pid"

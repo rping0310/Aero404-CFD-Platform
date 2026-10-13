@@ -1,0 +1,9 @@
+simulation_type = 1
+corner_radius = 10
+free_stream_velocity = 17
+pitch_angle = 0
+roll_angle = 0
+yaw_angle = 0
+ride_height = 0.035
+steering_angle = 0
+stopping_iteration = 3000

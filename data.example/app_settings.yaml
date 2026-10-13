@@ -1,0 +1,37 @@
+# Application settings. Hot-reloaded (editable from the Settings tab as admin, or here).
+
+# Sub-folder (under nfs_root) per simulation type
+simulation_type_folders:
+  '1': Straight
+  '2': Yaw
+  '3': Cornering
+
+# Shared case folder AS SEEN BY THE MACHINE RUNNING THIS PLATFORM (ServerA)
+nfs_root: /home/usera/CFD_cloud_NFS
+viewer_data_path: /home/usera/CFD_cloud_NFS   # where the Case List / Slices / Plots / 3D tabs read results from
+
+# Folder (inside each simulation-type folder) that is copied for every new case.
+# It must contain exactly one .sim file, plus your macros.
+template_folder_name: template_CFD
+
+# Macro handed to starccm+ -batch for every new case
+entry_macro: gui_run.java
+
+# Which uploaded geometry file names are accepted (regular expression)
+uploaded_file_pattern: TH1[123]_\d+\.x_t
+uploaded_file_display_name: Wing/Diffuser Package (TH11/TH12/TH13_XXX.x_t)
+max_upload_size_mb: 500
+
+status_poll_interval_sec: 10     # how often the queue checks running jobs
+session_timeout_min: 480         # login session lifetime
+site_title: CFD Viewer
+
+# The login cookie is flagged "Secure", so login only works over HTTPS (or http://localhost).
+# For a plain-HTTP LAN test set this to false. Keep it true in production behind HTTPS.
+cookie_secure: true
+
+# Optional: kill a running job and mark it FAILED when its workflow.log contains a given text.
+# Once this list exists it REPLACES the built-in default (the "domain.inlet missing" rule below).
+# fail_log_rules:
+#   - match: 'Named object "domain.inlet" does not exist in manager'
+#     reason: "No inlet boundary (CAD likely has a hole) - stopped early"

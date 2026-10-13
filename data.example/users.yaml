@@ -1,0 +1,7 @@
+# Accounts. Hot-reloaded. Do NOT edit passwords by hand - create / update accounts with:
+#
+#     venv/bin/python tools/add_user.py admin --role admin
+#
+# Roles: admin (everything), user (add cases, view), visitor (view only).
+# Passwords are stored as salted PBKDF2-SHA256 hashes ("pbkdf2$<salt>$<digest>").
+users: []
