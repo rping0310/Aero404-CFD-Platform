@@ -1,197 +1,198 @@
 # Aero404 CFD Platform
 
-多使用者 **STAR-CCM+ 排程平台 + CFD 結果瀏覽器**（Web 版）。
-Multi-user job queue for STAR-CCM+ (local or over SSH) with a built-in result viewer, running as a small FastAPI service.
+**Language:** English · [繁體中文](README_zh.md)
 
-- **Job Session**：網頁新增 case → 自動複製 template、寫入參數、排隊、依核心數啟動 `starccm+ -batch`，可多台伺服器
-- **結果瀏覽**：Case List（`Result.dat` 表格）、Slices（PNG 序列）、Plots（CSV 殘差／力係數）、3D（STL）
-- **管理**：三種角色（admin / user / visitor）、Kill、插隊、備註、登入記錄、設定頁（YAML 熱重載）
-- **安全**：密碼以 PBKDF2-SHA256 加鹽雜湊儲存、登入失敗限流（每 IP 5 分鐘內最多 5 次失敗）、HttpOnly + Secure cookie
-- **Log 檢視**：每個 job 一鍵開啟 `workflow.log`，分頁（最前／上一頁／下一頁／最後），可左右捲動
-- **自動判定失敗**：log 出現指定文字就停止 job 並標示 FAILED（預設偵測「沒有 inlet 邊界」）
-- **重啟不中斷**：重啟網頁服務不會殺掉正在跑的 job，重啟後自動接手
+A multi-user **STAR-CCM+ job queue and CFD result viewer** for the web. It queues simulations, runs them locally or over SSH on several servers, and lets your team browse the results — all from a small FastAPI service.
+
+- **Job Session** — add a case in the browser; the platform copies your template, writes the parameters, queues the job and starts `starccm+ -batch` when cores are free, across multiple servers
+- **Result viewer** — Case List (`Result.dat` table), Slices (PNG sequences), Plots (residual / force CSVs), 3D (STL)
+- **Administration** — three roles (admin / user / visitor), Kill, jump the queue, notes, login log, settings page (hot-reloaded YAML)
+- **Security** — passwords stored as salted PBKDF2-SHA256 hashes, login rate limiting (5 failures per IP per 5 minutes), HttpOnly + Secure session cookie
+- **Log viewer** — one click opens a job's `workflow.log`, with paging (first / previous / next / last) and horizontal scrolling
+- **Automatic failure detection** — stop a job and mark it FAILED when its log contains a given text (default: detects a missing inlet boundary)
+- **Restart-safe** — restarting the web service does not kill running jobs; it re-adopts them afterwards
 
 ```
-Browser ──HTTPS──> nginx (可選) ──> uvicorn / FastAPI (systemd)
-                                        ├─ Server A（本機：subprocess）
-                                        └─ Server B（SSH + nohup）     兩台掛載同一份 NFS 案例資料夾
+Browser ──HTTPS──> nginx (optional) ──> uvicorn / FastAPI (systemd)
+                                            ├─ Server A  (this machine: subprocess)
+                                            └─ Server B  (SSH + nohup)     both mount the same NFS case folder
 ```
 
 ---
 
-## 1. 需求
+## 1. Requirements
 
-| 項目 | 說明 |
+| Item | Notes |
 |---|---|
-| OS | Linux（Ubuntu 22.04 / 24.04 測試過） |
-| Python | 3.10 以上 |
-| STAR-CCM+ | 每台運算伺服器都要自行安裝並有授權（本專案不含） |
-| 共用儲存 | 所有伺服器掛載同一份案例資料夾（NFS）；各機本地路徑可以不同 |
-| SSH | 執行平台的主機要能**免密碼金鑰** SSH 到每台遠端伺服器 |
+| OS | Linux (tested on Ubuntu 22.04 / 24.04) |
+| Python | 3.10 or newer |
+| STAR-CCM+ | Installed and licensed on every compute server (not included) |
+| Shared storage | All servers mount the same case folder (NFS); the local path may differ per machine |
+| SSH | The machine running the platform must reach every remote server with **passwordless key-based** SSH |
 
-## 2. 快速開始
+## 2. Quick start
 
-以下以 `/home/user/aero404_cfd_platform` 為例，請換成你自己的路徑與使用者。
+The examples use `/home/user/aero404_cfd_platform`; replace it with your own path and user.
 
 ```bash
 git clone https://github.com/rping0310/Aero404-CFD-Platform.git /home/user/aero404_cfd_platform
 cd /home/user/aero404_cfd_platform
-bash deploy/install.sh          # 建 venv、裝套件、由 data.example/ 複製出 data/
+bash deploy/install.sh          # creates the venv, installs packages, copies data.example/ to data/
 ```
 
-1. 編輯 `data/servers.yaml`、`data/app_settings.yaml`（見「3. 修改路徑與設定」）
-2. 建立第一個管理員帳號（見「5. 註冊帳號」）：
+1. Edit `data/servers.yaml` and `data/app_settings.yaml` (see "3. Paths and settings").
+2. Create the first admin account (see "5. Creating accounts"):
    ```bash
    venv/bin/python tools/add_user.py alice --role admin
    ```
-3. 前景啟動測試：
+3. Run it in the foreground to test:
    ```bash
    venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8080
    ```
-   瀏覽器開 `http://localhost:8080` 登入。若從別台電腦用 `http://` 連線，登入會失敗，原因與解法見「7. HTTPS」。
-4. 設成開機自動啟動（見「6. systemd」）。
+   Open `http://localhost:8080` and log in. From another computer over plain `http://` the login will fail — see "7. HTTPS".
+4. Start it automatically at boot (see "6. systemd").
 
-## 3. 修改路徑與設定
+## 3. Paths and settings
 
-所有設定都在 `data/`（不會被 git 追蹤）。`data.example/` 是範例，裡面全是假資料（Server A / Server B、`192.0.2.x`、`/home/usera/...`）。
-**`data/*.yaml` 修改後立即生效，不需重啟**（admin 也可在網頁 Settings 分頁編輯）。
+All configuration lives in `data/` (not tracked by git). `data.example/` holds examples filled with dummy values (Server A / Server B, `192.0.2.x`, `/home/usera/...`).
+**Changes to `data/*.yaml` take effect immediately — no restart needed** (admins can also edit them in the Settings tab).
 
-| 要改什麼 | 檔案與欄位 |
+| What to change | File and field |
 |---|---|
-| 伺服器清單（名稱、IP、核心數、保留核心） | `data/servers.yaml`：`name`、`host`、`total_cores`、`reserved_cores`、`enabled` |
-| 每台機器上的 STAR-CCM+ 路徑 | `data/servers.yaml`：`starccm_path`（該機器上的路徑） |
-| 每台機器上共用資料夾的本地路徑 | `data/servers.yaml`：`nfs_path`（同一份 NFS 在不同機器可掛在不同路徑） |
-| SSH 使用者、金鑰 | `data/servers.yaml`：`ssh_user`、`ssh_port`、`ssh_key_path` |
-| 平台所在機器看到的案例資料夾 | `data/app_settings.yaml`：`nfs_root`、`viewer_data_path` |
-| Straight / Yaw / Cornering 子資料夾名稱 | `data/app_settings.yaml`：`simulation_type_folders` |
-| Template 資料夾名稱、入口 macro | `data/app_settings.yaml`：`template_folder_name`、`entry_macro` |
-| 上傳檔名規則 | `data/app_settings.yaml`：`uploaded_file_pattern`（正規表示式） |
-| 建立 case 的步驟 | `data/workflow_template.yaml` |
-| 新 case 的預設參數 | `data/case_parameter_default.dat` |
-| 網頁埠、專案路徑、執行使用者 | `/etc/systemd/system/aero404.service`（見第 6 節） |
+| Server list (name, IP, cores, reserved cores) | `data/servers.yaml`: `name`, `host`, `total_cores`, `reserved_cores`, `enabled` |
+| STAR-CCM+ path on each machine | `data/servers.yaml`: `starccm_path` (path on that machine) |
+| Local path of the shared folder on each machine | `data/servers.yaml`: `nfs_path` (the same NFS share may be mounted at different paths) |
+| SSH user and key | `data/servers.yaml`: `ssh_user`, `ssh_port`, `ssh_key_path` |
+| Case folder as seen by the machine running the platform | `data/app_settings.yaml`: `nfs_root`, `viewer_data_path` |
+| Names of the Straight / Yaw / Cornering sub-folders | `data/app_settings.yaml`: `simulation_type_folders` |
+| Template folder name, entry macro | `data/app_settings.yaml`: `template_folder_name`, `entry_macro` |
+| Accepted upload file names | `data/app_settings.yaml`: `uploaded_file_pattern` (regular expression) |
+| Steps performed when a case is created | `data/workflow_template.yaml` |
+| Default parameters of a new case | `data/case_parameter_default.dat` |
+| Web port, project path, service user | `/etc/systemd/system/aero404.service` (see section 6) |
 
-**規則：** `host` 為 `127.0.0.1` / `localhost` 的那台視為「本機」，以子行程執行；其他一律走 SSH。
-`nfs_path` 是「該台機器上」看到的路徑，與平台所在機器的 `nfs_root` 不同時，平台會自動換算。
+**Rule:** the server whose `host` is `127.0.0.1` / `localhost` is treated as "local" and runs jobs as child processes; every other server is reached over SSH.
+`nfs_path` is the path *on that machine*; when it differs from `nfs_root` on the platform host, the platform converts between them.
 
-### 案例資料夾結構（共用 NFS）
+### Case folder layout (shared NFS)
 
 ```
 CFD_cloud_NFS/                    ← nfs_root
 ├── Straight/                     ← simulation_type 1
-│   ├── template_CFD/             ← template_folder_name：必須含「一個」.sim 與你的 macro
+│   ├── template_CFD/             ← template_folder_name: must contain exactly ONE .sim plus your macros
 │   │   ├── template.sim
 │   │   ├── gui_run.java          ← entry_macro
 │   │   └── ...
-│   └── CASE_001/                 ← 每個新 case 由 template 複製而來
+│   └── CASE_001/                 ← every new case is copied from the template
 │       ├── CASE_001.sim
-│       ├── case_parameter.dat    ← 平台寫入的參數
-│       ├── workflow.log          ← 執行輸出（網頁可檢視）
-│       └── Result.dat            ← 你的 macro 產生，Case List 讀這個
+│       ├── case_parameter.dat    ← parameters written by the platform
+│       ├── workflow.log          ← run output (viewable in the browser)
+│       └── Result.dat            ← produced by your macro; the Case List reads this
 ├── Yaw/
 └── Cornering/
 ```
 
-### 加入第二台伺服器（SSH）
+### Adding a second server (SSH)
 
-在**執行平台的主機**上，用執行平台的使用者：
+On the **machine running the platform**, as the user that runs it:
 
 ```bash
-ssh-keygen -t ed25519                       # 已有金鑰可略過
+ssh-keygen -t ed25519                       # skip if you already have a key
 ssh-copy-id -i ~/.ssh/id_ed25519.pub userb@192.0.2.20
-ssh -o BatchMode=yes userb@192.0.2.20 true  # 不可要求輸入密碼，成功才算完成
+ssh -o BatchMode=yes userb@192.0.2.20 true  # must NOT ask for a password; success means it is set up
 ```
 
-再於 `data/servers.yaml` 新增該台。遠端也必須掛載同一份 NFS，且 `starccm_path` 正確。
+Then add the server to `data/servers.yaml`. The remote machine must also mount the same NFS share and have a correct `starccm_path`.
 
-## 4. 角色權限
+## 4. Roles
 
-| 動作 | admin | user | visitor |
+| Action | admin | user | visitor |
 |---|:-:|:-:|:-:|
-| 瀏覽結果、看 job 列表與 log | ✓ | ✓ | ✓ |
-| 新增 case、編輯備註 | ✓ | ✓ | |
-| Kill、插隊、刪除記錄、清除 FAILED | ✓ | | |
-| Settings、登入記錄 | ✓ | | |
+| Browse results, see the job list and logs | ✓ | ✓ | ✓ |
+| Add cases, edit notes | ✓ | ✓ | |
+| Kill, jump the queue, delete records, clear FAILED | ✓ | | |
+| Settings, login log | ✓ | | |
 
-## 5. 註冊帳號
+## 5. Creating accounts
 
-平台**沒有自助註冊**，帳號由管理員用命令列建立（密碼只存雜湊，`users.yaml` 裡看不到明碼）：
+There is **no self-registration**. An administrator creates accounts on the command line. Passwords are stored only as hashes — you will never see them in `users.yaml`.
 
 ```bash
 cd /home/user/aero404_cfd_platform
-venv/bin/python tools/add_user.py alice --role admin     # 新增管理員（會提示輸入密碼，至少 8 字元）
+venv/bin/python tools/add_user.py alice --role admin     # new admin (prompts for a password, min. 8 characters)
 venv/bin/python tools/add_user.py bob   --role user
 venv/bin/python tools/add_user.py carol --role visitor
-venv/bin/python tools/add_user.py bob                    # 已存在 → 重設密碼
-venv/bin/python tools/add_user.py bob --role admin       # 已存在 → 改角色（密碼提示直接 Enter = 保留原密碼）
+venv/bin/python tools/add_user.py bob                    # existing account → reset the password
+venv/bin/python tools/add_user.py bob --role admin       # existing account → change role (press Enter at the prompt to keep the password)
 venv/bin/python tools/add_user.py bob --delete
 venv/bin/python tools/add_user.py --list
 ```
 
-- 服務會熱重載 `users.yaml`，**不必重啟**。
-- systemd 的 `CFD_PLATFORM_DATA_DIR` 不是預設的 `./data` 時，加上 `--data-dir /path/to/data`。
-- 登入記錄（時間、帳號、IP、成功與否）寫在 `data/login_log.jsonl`，admin 可在網頁 Settings 分頁底部的 Login Log 查看。
+- The service hot-reloads `users.yaml`, so **no restart is needed**.
+- If your systemd unit sets `CFD_PLATFORM_DATA_DIR` to something other than `./data`, add `--data-dir /path/to/data`.
+- Every login attempt (time, account, IP, success) is appended to `data/login_log.jsonl`; admins can read it under **Settings → Login Log** in the web UI.
 
-## 6. 設成開機自動啟動（systemd）
+## 6. Start at boot (systemd)
 
-1. 編輯 `deploy/aero404.service`：改 `User=`、`WorkingDirectory=`、`CFD_PLATFORM_DATA_DIR=`、`ExecStart=` 裡的路徑（範例為 `/home/user/aero404_cfd_platform`）。
-2. 安裝並啟動：
+1. Edit `deploy/aero404.service`: change `User=`, `WorkingDirectory=`, `CFD_PLATFORM_DATA_DIR=` and the paths in `ExecStart=` (the example uses `/home/user/aero404_cfd_platform`).
+2. Install and start it:
    ```bash
    sudo cp deploy/aero404.service /etc/systemd/system/aero404.service
    sudo systemctl daemon-reload
-   sudo systemctl enable --now aero404       # enable = 開機自動啟動
+   sudo systemctl enable --now aero404       # enable = start automatically at boot
    ```
-3. 常用指令：
+3. Everyday commands:
    ```bash
    systemctl status aero404
-   journalctl -u aero404 -f                  # 即時 log
-   sudo systemctl restart aero404            # 後端程式更新後需要；前端檔案更新只需瀏覽器 Ctrl+Shift+R
+   journalctl -u aero404 -f                  # live log
+   sudo systemctl restart aero404            # needed after backend code changes; frontend changes only need a browser hard refresh (Ctrl+Shift+R)
    ```
 
-> **為什麼設定檔裡有 `KillMode=process`？** 本機伺服器上的 job 是這個服務的子行程。systemd 預設
-> （`control-group`）在 `restart` 時會把整個行程群組殺掉，連同跑了好幾天的 STAR-CCM+ 一起。
-> `KillMode=process` 只停網頁服務，job 繼續跑；服務再啟動後會依 PID 與 exit code 檔接手，結束時正確標示 DONE / FAILED。
-> 遠端（SSH）job 本來就不受影響。
+> **Why does the unit contain `KillMode=process`?** Jobs on the local server are child processes of this service. systemd's default
+> (`control-group`) kills the whole process group on `restart` — including a STAR-CCM+ run that has been going for days.
+> With `KillMode=process` only the web service stops; jobs keep running, and after the service starts again it re-adopts them by PID and exit-code file and marks them DONE / FAILED correctly when they finish.
+> Remote (SSH) jobs are unaffected either way.
 
 ## 7. HTTPS
 
-登入 cookie 帶有 `Secure` 旗標，瀏覽器在純 `http://` 下（`localhost` 除外）會丟掉它，結果是「密碼正確卻登不進去」。擇一：
+The login cookie carries the `Secure` flag, so browsers drop it on plain `http://` (except `localhost`) — the symptom is "correct password, but login does not stick". Pick one:
 
-**A. nginx + HTTPS（建議）**
+**A. nginx + HTTPS (recommended)**
 
 ```bash
 sudo apt install nginx
 sudo mkdir -p /etc/ssl/aero404
 sudo openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
   -keyout /etc/ssl/aero404/server.key -out /etc/ssl/aero404/server.crt \
-  -subj "/CN=cfd.example.internal"          # 自簽憑證；有正式憑證請直接使用
+  -subj "/CN=cfd.example.internal"          # self-signed; use a real certificate if you have one
 sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/aero404
 sudo ln -s /etc/nginx/sites-available/aero404 /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-然後用 `https://<主機>:6200` 開啟（埠號見 `nginx.conf.example`；自簽憑證瀏覽器會警告，確認後繼續）。uvicorn 維持只聽 `127.0.0.1:8080`。
+Then open `https://<host>:6200` (the port is set in `nginx.conf.example`; with a self-signed certificate your browser will warn once). Keep uvicorn listening on `127.0.0.1:8080` only.
 
-**B. 僅限內網、純 HTTP 測試：** 在 `data/app_settings.yaml` 設 `cookie_secure: false`。不要在不受信任的網路使用。
+**B. Trusted LAN only, plain HTTP for testing:** set `cookie_secure: false` in `data/app_settings.yaml`. Do not do this on an untrusted network.
 
-## 8. Log 檢視與自動判定失敗
+## 8. Log viewer and automatic failure detection
 
-- Job Session 每列的 📄 按鈕會開啟該 case 的 `workflow.log`（1000 行一頁，⏮ ◀ ▶ ⏭ 翻頁；停在最後一頁時 SOLVING 的 job 每 3 秒自動更新）。每頁行數是 `frontend/static/js/app.js` 裡的 `logLines`（後端上限 2000）。
-- 若 job 還在 SOLVING，而 `workflow.log` 出現指定文字，平台會停掉該 job 並標示 FAILED，原因顯示在列上，避免白白算完。預設規則為偵測 `Named object "domain.inlet" does not exist in manager`（CAD 有洞，內流場沒有 inlet）。
-  自訂請在 `data/app_settings.yaml` 加入 `fail_log_rules`（範例已附在檔案中；一旦加入就**取代**內建預設）。
-- 平台判定 FAILED 的其他情況：程序結束且 exit code 非 0、啟動失敗、服務重啟後找不到程序、管理員 Kill。macro 內部自己印出的 `[ERROR]` **不會**被判為失敗，請用上面的規則涵蓋。
+- The 📄 button on each Job Session row opens that case's `workflow.log` (1000 lines per page; ⏮ ◀ ▶ ⏭ to page; while you are on the last page, a SOLVING job refreshes every 3 seconds). The page size is `logLines` in `frontend/static/js/app.js` (the backend caps it at 2000).
+- While a job is SOLVING and its `workflow.log` contains a configured text, the platform kills the job and marks it FAILED with the reason shown on the row, so you do not waste hours of compute. The built-in rule detects `Named object "domain.inlet" does not exist in manager` (a CAD hole turns the inside into external flow, so no inlet exists).
+  Define your own under `fail_log_rules` in `data/app_settings.yaml` (an example is included in the file; once the list exists it **replaces** the built-in default).
+- Other situations the platform marks FAILED: the process ended with a non-zero exit code, it failed to start, it no longer existed after a service restart, or an admin killed it. An `[ERROR]` merely printed by your macro is **not** treated as a failure — cover it with a rule as above.
 
-## 9. 更新與備份
+## 9. Updating and backups
 
 ```bash
 cd /home/user/aero404_cfd_platform
 git pull
 venv/bin/pip install -r requirements.txt
-sudo systemctl restart aero404          # 不會中斷執行中的 job（KillMode=process）
+sudo systemctl restart aero404          # does not interrupt running jobs (KillMode=process)
 ```
 
-備份：只需要 `data/` 資料夾（帳號、佇列 `jobs.json`、伺服器清單、登入記錄）。**不要把 `data/` 提交到 git**（已在 `.gitignore`）。
+Back up only the `data/` folder (accounts, the `jobs.json` queue, server list, login log). **Never commit `data/` to git** (it is in `.gitignore`).
 
-## 10. 測試
+## 10. Tests
 
 ```bash
 cd backend
@@ -201,31 +202,31 @@ python3 -m unittest app.jobs.test_real_runner app.test_log_page
 python3 -m unittest app.test_api app.test_integration app.test_frontend_assets
 ```
 
-測試使用 `data.example/` 的暫存副本與測試帳號 `admin` / `changeme`，不會碰你的 `data/`。
+Tests use a temporary copy of `data.example/` and a test account `admin` / `changeme`; they never touch your `data/`.
 
-## 11. 疑難排解
+## 11. Troubleshooting
 
-| 現象 | 原因與處理 |
+| Symptom | Cause and fix |
 |---|---|
-| 密碼正確卻登不進去 | 用 `http://` 連線，Secure cookie 被丟掉 → 見第 7 節 |
-| 登入回 429 | 同一 IP 5 分鐘內失敗超過 5 次，等待後再試 |
-| 新增 case 後立刻 FAILED，`Failed to start` | 遠端 SSH 無法免密碼登入，或 `starccm_path` / `nfs_path` 錯誤；先在主機上手動 `ssh -o BatchMode=yes user@host true` |
-| 遠端 job 的 log 打不開 | SSH 連不上該台，或 `nfs_path` 與實際路徑不符 |
-| FAILED `Exit code: 1` 但 log 沒有錯誤 | 程序被外力結束（機器重開、NFS／磁碟故障）時，exit code 檔讀不到也會顯示 1；檢查 `journalctl -k` 與 `dmesg` |
-| FAILED `Process no longer existed after service restart` | 服務重啟時該 job 的程序已不存在；確認 service 檔有 `KillMode=process` |
-| 改了 `*.yaml` 沒生效 | 應立即生效；確認改的是 `CFD_PLATFORM_DATA_DIR` 指到的那份 `data/` |
+| Correct password but cannot log in | Connecting over `http://`; the Secure cookie is dropped → see section 7 |
+| Login returns 429 | More than 5 failed attempts from the same IP within 5 minutes; wait and retry |
+| New case is FAILED immediately with `Failed to start` | Passwordless SSH to the remote server does not work, or `starccm_path` / `nfs_path` is wrong; test with `ssh -o BatchMode=yes user@host true` on the platform host |
+| A remote job's log will not open | SSH to that server is down, or `nfs_path` does not match the real path |
+| FAILED `Exit code: 1` but the log shows no error | The process was killed from outside (reboot, NFS / disk failure); when the exit-code file cannot be read, `1` is shown too. Check `journalctl -k` and `dmesg` |
+| FAILED `Process no longer existed after service restart` | The job's process was already gone when the service restarted; make sure the unit has `KillMode=process` |
+| Edited a `*.yaml` but nothing changed | It should apply immediately; make sure you edited the `data/` that `CFD_PLATFORM_DATA_DIR` points to |
 
-## 12. 專案結構
+## 12. Project layout
 
 ```
-backend/app/        FastAPI：routers/、jobs/（佇列、runner、workflow）、config/（熱重載）、auth、session
-frontend/           templates/index.html、static/js/app.js（Alpine.js）、static/vendor/（Plotly、three.js）
-data.example/       範例設定（假資料）→ 複製成 data/
-deploy/             aero404.service、nginx.conf.example、install.sh
-tools/add_user.py   帳號管理
-docs/HANDOFF.md     早期設計文件（歷史資料，部分內容已過時）
+backend/app/        FastAPI: routers/, jobs/ (queue, runners, workflow), config/ (hot reload), auth, session
+frontend/           templates/index.html, static/js/app.js (Alpine.js), static/vendor/ (Plotly, three.js)
+data.example/       example configuration (dummy values) → copy to data/
+deploy/             aero404.service, nginx.conf.example, install.sh
+tools/add_user.py   account management
+docs/HANDOFF.md     early design document (historical, partly outdated; written in Chinese)
 ```
 
-## 授權
+## License
 
-Copyright © 2026 Ping Lin · Non-Commercial Use Only（同網頁 About 頁所載）。
+Copyright © 2026 Ping Lin · Non-Commercial Use Only (as stated on the web UI's About page).
