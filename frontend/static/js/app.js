@@ -224,6 +224,18 @@ function platform() {
       return [...new Set(this.cases.map((c) => c.folder))].sort();
     },
 
+    caseKey(c) {
+      return '@case:' + JSON.stringify([c.folder, c.name]);
+    },
+
+    caseLabel(key) {
+      if (!key) return '';
+      try {
+        const [folder, name] = JSON.parse(key.slice(6));
+        return `${folder} / ${name}`;
+      } catch (e) { return key; }
+    },
+
     filteredCases() {
       if (this.caseFolderFilter === 'all') return this.cases;
       return this.cases.filter((c) => c.folder === this.caseFolderFilter);
@@ -353,8 +365,8 @@ function platform() {
     // CLA / Z Balance are CFD results, which only exist once a case has
     // actually finished running (Result.dat written); look them up from
     // whatever the Case List already fetched, matched by case name.
-    caseResultValue(caseName, key) {
-      const c = this.cases.find((x) => x.name === caseName);
+    caseResultValue(job, key) {
+      const c = this.cases.find((x) => x.name === job.case_name && Number(x.simulation_type) === Number(job.simulation_type));
       return c && c.result ? c.result[key] : undefined;
     },
 

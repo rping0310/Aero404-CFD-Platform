@@ -95,7 +95,7 @@
           <h2>Case List</h2>
           <div class="actions">
             <span class="readonly-note" x-show="mainCase || subCase">
-              Main: <b x-text="mainCase || '—'"></b> &nbsp; Sub: <b x-text="subCase || '—'"></b>
+              Main: <b x-text="caseLabel(mainCase) || '—'"></b> &nbsp; Sub: <b x-text="caseLabel(subCase) || '—'"></b>
             </span>
             <button @click="loadCases()">↻ Refresh</button>
           </div>
@@ -122,16 +122,16 @@
               </tr>
             </thead>
             <tbody>
-              <template x-for="c in sortedCases()" :key="c.name">
-                <tr :class="{'is-main': c.name===mainCase, 'is-sub': c.name===subCase}"
-                    @click="toggleSelect(c.name)">
+              <template x-for="c in sortedCases()" :key="caseKey(c)">
+                <tr :class="{'is-main': caseKey(c)===mainCase, 'is-sub': caseKey(c)===subCase}"
+                    @click="toggleSelect(caseKey(c))">
                   <td class="checkbox-col" @click.stop>
-                    <input type="checkbox" :checked="selected.includes(c.name)" @change="toggleSelect(c.name)">
+                    <input type="checkbox" :checked="selected.includes(caseKey(c))" @change="toggleSelect(caseKey(c))">
                   </td>
                   <td>
                     <span x-text="c.name"></span>
-                    <span class="badge main" x-show="c.name===mainCase">MAIN</span>
-                    <span class="badge sub" x-show="c.name===subCase">SUB</span>
+                    <span class="badge main" x-show="caseKey(c)===mainCase">MAIN</span>
+                    <span class="badge sub" x-show="caseKey(c)===subCase">SUB</span>
                   </td>
                   <td x-text="c.folder"></td>
                   <template x-for="key in resultKeys" :key="key">
@@ -165,7 +165,7 @@
             <label><input type="checkbox" x-model="syncSlicePosition" style="width:auto"> Sync Slice Position</label>
             <label><input type="checkbox" x-model="syncZoom" style="width:auto"> Sync Zoom</label>
           </div>
-          <span class="readonly-note">Main: <b x-text="mainCase||'—'"></b> / Sub: <b x-text="subCase||'—'"></b></span>
+          <span class="readonly-note">Main: <b x-text="caseLabel(mainCase)||'—'"></b> / Sub: <b x-text="caseLabel(subCase)||'—'"></b></span>
         </div>
 
         <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
@@ -173,7 +173,7 @@
           <!-- ===== Main pane ===== -->
           <div class="compare-pane">
             <div class="pane-head">
-              <span class="role main">Main Case · <span x-text="mainCase||'not selected'"></span></span>
+              <span class="role main">Main Case · <span x-text="caseLabel(mainCase)||'not selected'"></span></span>
               <label class="pane-head-select">Slice Type:
                 <select x-model="sliceTypeMain" @change="onSliceTypeChange('main')" :disabled="!mainCase">
                   <option value="" x-show="!sliceTypesMain.length">(no folders available)</option>
@@ -224,7 +224,7 @@
           <!-- ===== Sub pane ===== -->
           <div class="compare-pane" x-show="subCase" x-cloak>
             <div class="pane-head">
-              <span class="role sub">Sub Case · <span x-text="subCase||'not selected'"></span></span>
+              <span class="role sub">Sub Case · <span x-text="caseLabel(subCase)||'not selected'"></span></span>
               <label class="pane-head-select">Slice Type:
                 <select x-model="sliceTypeSub" @change="onSliceTypeChange('sub')" :disabled="!subCase || syncSliceType">
                   <option value="" x-show="!sliceTypesSub.length">(no folders available)</option>
@@ -283,12 +283,12 @@
             <template x-for="f in csvFiles" :key="f"><option :value="f" x-text="f"></option></template>
           </select>
           <button @click="loadCsvFiles()">↻ Refresh CSV List</button>
-          <span class="readonly-note">Main: <b x-text="mainCase||'—'"></b> / Sub: <b x-text="subCase||'—'"></b></span>
+          <span class="readonly-note">Main: <b x-text="caseLabel(mainCase)||'—'"></b> / Sub: <b x-text="caseLabel(subCase)||'—'"></b></span>
         </div>
 
         <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
           <div class="compare-pane">
-            <div class="pane-head"><span class="role main">Main · <span x-text="mainCase||'not selected'"></span></span></div>
+            <div class="pane-head"><span class="role main">Main · <span x-text="caseLabel(mainCase)||'not selected'"></span></span></div>
             <div id="plot-main" class="plot-host"></div>
             <div class="series-list" x-show="plotSeriesNamesMain.length">
               <h4>Visible Series</h4>
@@ -301,7 +301,7 @@
             </div>
           </div>
           <div class="compare-pane" x-show="subCase" x-cloak>
-            <div class="pane-head"><span class="role sub">Sub · <span x-text="subCase||'not selected'"></span></span></div>
+            <div class="pane-head"><span class="role sub">Sub · <span x-text="caseLabel(subCase)||'not selected'"></span></span></div>
             <div id="plot-sub" class="plot-host"></div>
             <div class="series-list" x-show="plotSeriesNamesSub.length">
               <h4>Visible Series</h4>
@@ -329,7 +329,7 @@
         <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
           <div class="compare-pane">
             <div class="pane-head">
-              <span class="role main">Main · <span x-text="mainCase||'not selected'"></span></span>
+              <span class="role main">Main · <span x-text="caseLabel(mainCase)||'not selected'"></span></span>
               <button class="icon-btn quiet" @click="resetStlView('main')" x-show="threeScenes.main?.mesh">↺ Reset View</button>
             </div>
             <div id="stl-main" class="stl-host">
@@ -344,7 +344,7 @@
           </div>
           <div class="compare-pane" x-show="subCase" x-cloak>
             <div class="pane-head">
-              <span class="role sub">Sub · <span x-text="subCase||'not selected'"></span></span>
+              <span class="role sub">Sub · <span x-text="caseLabel(subCase)||'not selected'"></span></span>
               <button class="icon-btn quiet" @click="resetStlView('sub')" x-show="threeScenes.sub?.mesh">↺ Reset View</button>
             </div>
             <div id="stl-sub" class="stl-host">
@@ -401,8 +401,8 @@
                     <div class="fail-reason" x-show="j.status==='FAILED' && j.error_message" x-text="j.error_message"></div>
                   </td>
                   <td x-text="j.cores_allocated ?? '—'"></td>
-                  <td x-text="formatResultValue(caseResultValue(j.case_name, 'mean_Cla'))"></td>
-                  <td x-text="formatResultValue(caseResultValue(j.case_name, 'Aero_balance_z'))"></td>
+                  <td x-text="formatResultValue(caseResultValue(j, 'mean_Cla'))"></td>
+                  <td x-text="formatResultValue(caseResultValue(j, 'Aero_balance_z'))"></td>
                   <td x-text="j.added_by"></td>
                   <td class="note-cell" @click="openNoteModal(j)" :title="j.note || ''">
                     <span x-show="!j.note" class="note-empty">+ note</span>

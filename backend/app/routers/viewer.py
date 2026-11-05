@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,10 +19,23 @@ def _root() -> Path:
 
 
 def _case(case_name: str) -> Path:
+    folder = None
+    if case_name.startswith("@case:"):
+        try:
+            identity = json.loads(case_name[6:])
+            if not isinstance(identity, list) or len(identity) != 2 or not all(isinstance(x, str) for x in identity):
+                raise ValueError("Invalid case identity")
+            folder, case_name = identity
+        except (ValueError, TypeError):
+            raise HTTPException(400, "Invalid case identity")
     if Path(case_name).name != case_name or ".." in case_name:
         raise HTTPException(400, "Invalid case name")
     root = _root()
-    folders = settings.get_app_settings().get("simulation_type_folders", {}).values()
+    folders = [str(f) for f in settings.get_app_settings().get("simulation_type_folders", {}).values()]
+    if folder is not None:
+        if folder not in folders:
+            raise HTTPException(400, "Invalid simulation folder")
+        folders = [folder]
     matches = [(root / str(folder) / case_name).resolve() for folder in folders]
     for path in matches:
         if path.parent.parent == root and path.is_dir():
