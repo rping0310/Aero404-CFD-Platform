@@ -1,7 +1,7 @@
 """Shared test fixtures.
 
 Tests never touch your real ``data/`` directory. They build a throw-away copy of
-``data.example/`` (two example servers, no accounts) and add one hashed test
+``data.example/`` (two example servers and a non-login placeholder) and add one hashed test
 admin account: ``admin`` / ``changeme``.
 """
 

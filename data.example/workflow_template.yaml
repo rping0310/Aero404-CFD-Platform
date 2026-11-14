@@ -1,15 +1,15 @@
-# 新增 case 時實際執行的步驟。改這個檔案就能調整流程，不用改程式碼。
+# Steps executed when a case is created. Edit this file to adjust the workflow.
 #
-# 對照實際操作：
-#   cd ~/CFD_cloud_NFS/Straight        (依 simulation_type 決定資料夾)
+# Equivalent manual operations:
+#   cd ~/CFD_cloud_NFS/Straight        (folder depends on simulation_type)
 #   cp -r template_CFD CASE_002
 #   cd CASE_002
 #   mv template.sim CASE_002.sim
-#   (把上傳的 TH1X_XXX.x_t 放進來)
-#   (寫入 case_parameter.dat)
+#   (copy the uploaded geometry into the case folder)
+#   (write case_parameter.dat)
 #   starccm+ -np 31 -batch batch_run.java CASE_002.sim
 #
-# 可用的變數（執行時由程式自動代入）：
+# Available variables (expanded at runtime):
 #   {{nfs_root}} {{sim_type_folder}} {{template_folder_name}} {{case_name}}
 #   {{case_folder}} {{template_sim_filename}} {{uploaded_filename}}
 #   {{starccm_path}} {{cores}} {{entry_macro}}

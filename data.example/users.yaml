@@ -4,4 +4,9 @@
 #
 # Roles: admin (everything), user (add cases, view), visitor (view only).
 # Passwords are stored as salted PBKDF2-SHA256 hashes ("pbkdf2$<salt>$<digest>").
-users: []
+# This placeholder is intentionally invalid and cannot be used to log in.
+# Delete it and create a real account with the command above; never use plaintext.
+users:
+  - name: example_user
+    role: visitor
+    password: "pbkdf2$REPLACE_WITH_SALT$REPLACE_WITH_HASH"
