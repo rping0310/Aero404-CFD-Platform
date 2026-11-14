@@ -97,7 +97,7 @@ class RemotePathMismatchTest(unittest.TestCase):
         self.runner = RealRunner(ssh_timeout=5)
         # work_dir 用一個 host 機器上保證不存在的路徑，
         # 確保測試不會不小心因為本機剛好有這個路徑而矇混過關
-        self.remote_work_dir = Path("/nonexistent_on_host/CFD_cloud_NFS/Straight/TH12_TEST")
+        self.remote_work_dir = Path("/nonexistent_on_host/CFD_cloud_NFS/Straight/CASE_TEST")
 
     def _fake_ssh(self, server, remote_command, *, check=False):
         """模擬遠端主機的行為，不實際發出任何網路連線。"""

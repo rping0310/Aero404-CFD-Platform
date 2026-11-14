@@ -19,7 +19,7 @@ entry_macro: gui_run.java
 
 # Which uploaded geometry file names are accepted (regular expression)
 uploaded_file_pattern: TH1[123]_\d+\.x_t
-uploaded_file_display_name: Wing/Diffuser Package (TH11/TH12/TH13_XXX.x_t)
+uploaded_file_display_name: Wing/Diffuser Package (CASE_XXX.x_t)
 max_upload_size_mb: 500
 
 status_poll_interval_sec: 10     # how often the queue checks running jobs
@@ -28,7 +28,6 @@ site_title: CFD Viewer
 
 # The login cookie is flagged "Secure", so login only works over HTTPS (or http://localhost).
 # For a plain-HTTP LAN test set this to false. Keep it true in production behind HTTPS.
-cookie_secure: true
 
 # Optional: kill a running job and mark it FAILED when its workflow.log contains a given text.
 # Once this list exists it REPLACES the built-in default (the "domain.inlet missing" rule below).

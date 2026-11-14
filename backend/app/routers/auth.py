@@ -3,7 +3,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..auth import authenticate
-from ..config.settings import DATA_DIR, get_app_settings
+from ..config.settings import DATA_DIR
 from ..dependencies import current_user, admin_user
 from ..session import Session, sessions
 
@@ -39,9 +39,8 @@ def login(body: LoginBody, request: Request, response: Response):
     _failed.pop(ip, None)
     _log(result.name, ip, True)
     token = sessions.create(result.name, result.role)
-    # secure cookies are dropped by browsers on plain http (except localhost); set cookie_secure: false in app_settings.yaml for HTTP-only testing
-    response.set_cookie("cfd_session", token, httponly=True, samesite="lax",
-                        secure=bool(get_app_settings().get("cookie_secure", True)))
+    # secure=True 要等 HTTPS 設好才能開，不然 http 下瀏覽器會整個丟掉這個 cookie 導致登入失敗
+    response.set_cookie("cfd_session", token, httponly=True, samesite="lax", secure=True)
     return {"name": result.name, "role": result.role}
 
 @router.post("/logout")

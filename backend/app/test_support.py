@@ -25,11 +25,7 @@ def prepare_data(root: Path) -> Path:
     from app.auth import hash_password
     users = {"users": [{"name": "admin", "role": "admin", "password": hash_password("changeme")}]}
     (data / "users.yaml").write_text(yaml.safe_dump(users, sort_keys=False), encoding="utf-8")
-    # The test client talks plain http, so the "Secure" login cookie must be off.
-    settings_path = data / "app_settings.yaml"
-    app_settings = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
-    app_settings["cookie_secure"] = False
-    settings_path.write_text(yaml.safe_dump(app_settings, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    # API fixtures use an HTTPS TestClient URL, honoring Secure login cookies.
     return data
 
 

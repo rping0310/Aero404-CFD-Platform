@@ -28,6 +28,7 @@ function platform() {
       { id: 'jobs', icon: '🗂️', label: 'Job Session' },
       { id: 'settings', icon: '⚙️', label: 'Settings' },
       { id: 'about', icon: 'ℹ️', label: 'About' },
+      { id: 'gallery', icon: '▧', label: 'Gallery' },
     ],
     error: '',
     message: '',
@@ -81,6 +82,8 @@ function platform() {
     // ---------------- Plots ----------------
     csvFiles: [],
     selectedCsv: '',
+    selectedCsvMain: '', selectedCsvSub: '',
+    csvFilesMain: [], csvFilesSub: [],
     plotSeriesNamesMain: [], plotSeriesNamesSub: [],
     plotVisibleSeriesMain: {}, plotVisibleSeriesSub: {},
 
@@ -155,6 +158,9 @@ function platform() {
     async logout() {
       await this.api('/api/logout', { method: 'POST' });
       clearInterval(this.pollTimer);
+      clearInterval(this.playTimerMain); clearInterval(this.playTimerSub);
+      this.playDirectionMain=0; this.playDirectionSub=0;
+      this.closeLog();
       this.user = null;
     },
 
@@ -794,10 +800,14 @@ function platform() {
       const [mainFiles, subFiles] = await Promise.all([fetchFor(this.mainCase), fetchFor(this.subCase)]);
       const union = [...new Set([...mainFiles, ...subFiles])].sort();
       this.csvFiles = union;
+      this.csvFilesMain = mainFiles;
+      this.csvFilesSub = subFiles;
+      if (!mainFiles.includes(this.selectedCsvMain)) this.selectedCsvMain = mainFiles[0] || '';
+      if (!subFiles.includes(this.selectedCsvSub)) this.selectedCsvSub = subFiles[0] || '';
       if (!this.selectedCsv || !union.includes(this.selectedCsv)) {
         this.selectedCsv = union[0] || '';
       }
-      if (this.selectedCsv) await this.drawPlots();
+      await this.drawPlots();
     },
 
     // Any column whose name contains "iteration" is dropped from the
@@ -811,7 +821,6 @@ function platform() {
     },
 
     async drawPlots() {
-      if (!this.selectedCsv) return;
       await this.drawOnePlot('main', 'plot-main', this.mainCase);
       await this.drawOnePlot('sub', 'plot-sub', this.subCase);
     },
@@ -819,10 +828,12 @@ function platform() {
     async drawOnePlot(role, divId, caseName) {
       const host = document.getElementById(divId);
       const namesKey = this._k('plotSeriesNames', role);
+      const file = this[this._k('selectedCsv', role)];
       if (!host) return;
-      if (!caseName) { host.innerHTML = ''; this[namesKey] = []; return; }
+      if (!caseName || !file) { if (host.data) Plotly.purge(host); host.innerHTML = ''; this[namesKey] = []; return; }
       try {
-        const d = await this.api(`/api/viewer/case/${encodeURIComponent(caseName)}/csv/${encodeURIComponent(this.selectedCsv)}`);
+        const d = await this.api(`/api/viewer/case/${encodeURIComponent(caseName)}/csv/${encodeURIComponent(file)}`);
+        if (file !== this[this._k('selectedCsv', role)] || caseName !== this[role === 'main' ? 'mainCase' : 'subCase']) return;
         const cols = this._plottableColumns(d.columns);
         const visKey = this._k('plotVisibleSeries', role);
         this[namesKey] = cols.map((c) => c.name);
@@ -834,7 +845,7 @@ function platform() {
           x, y: d.rows.map((r) => r[i]), name, type: 'scatter', mode: 'lines',
           visible: this[visKey][name] === false ? 'legendonly' : true,
         }));
-        Plotly.newPlot(divId, traces, {
+        await Plotly.react(divId, traces, {
           paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
           font: { color: '#1f2530' },
           xaxis: { title: d.columns[0], gridcolor: '#e5e7eb' },
@@ -842,8 +853,11 @@ function platform() {
           margin: { t: 20, r: 12, b: 40, l: 55 },
           showlegend: false,
         }, { responsive: true, displayModeBar: false });
+        document.dispatchEvent(new Event('scene-drawn'));
       } catch (e) {
-        host.innerHTML = `<div class="slice-empty">Could not find ${this.selectedCsv} (${e.message})</div>`;
+        host.replaceChildren();
+        const error = document.createElement('div'); error.className = 'slice-empty';
+        error.textContent = `Could not find ${file} (${e.message})`; host.append(error);
         this[namesKey] = [];
       }
     },
@@ -1018,6 +1032,7 @@ function platform() {
           return;
         }
         requestAnimationFrame(loop);
+        if (document.hidden || this.tab !== '3d' || !renderer.domElement.clientWidth || !renderer.domElement.clientHeight) return;
         renderer.render(scene, camera);
       };
       loop();

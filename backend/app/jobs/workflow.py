@@ -42,7 +42,7 @@ class WorkflowExecutor:
         執行建立 Case 的所有檔案操作。
 
         Args:
-            case_name: 使用者填的名稱（例如 TH12_002），會變成資料夾名和 .sim 檔名
+            case_name: 使用者填的名稱（例如 CASE_002），會變成資料夾名和 .sim 檔名
             simulation_type: 1/2/3，決定去 Straight/Yaw/Cornering 哪個資料夾
             server_name: 選的 server，用來查 nfs_path
             uploaded_file_path: 上傳的 TH1X_XXX.x_t 的暫存位置（可能 None，如果沒上傳）

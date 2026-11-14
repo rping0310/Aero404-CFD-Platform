@@ -53,9 +53,9 @@ class RealRunner(JobRunner):
         用 SSH cat 讀遠端主機上的檔案內容。
 
         不能用本機的 Path.read_text() 去讀 —— work_dir 存的是「目標主機自己
-        看到的路徑」（例如 /home/userb/CFD_cloud_NFS/...），就算底層是同一份
+        看到的路徑」（例如 /home/usera/CFD_cloud_NFS/...），就算底層是同一份
         共用 NFS，本機（跑這個 Web Service 的機器）通常掛載在不同的路徑
-        （例如 /home/usera/CFD_cloud_NFS/...），本機端直接讀那個路徑字串
+        （例如 /home/userb/CFD_cloud_NFS/...），本機端直接讀那個路徑字串
         幾乎必定會是 FileNotFoundError。一律透過 SSH 在目標主機上執行 cat，
         才是唯一可靠的讀法。
         """

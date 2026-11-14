@@ -6,6 +6,7 @@
   <title>Aero404 CFD Platform</title>
   <link rel="icon" href="/static/img/favicon.png">
   <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/liquid-platform.css?v=dock5">
 
   <!-- Register this as early as possible: script load-error events don't
        bubble, so this capture-phase listener must be registered before any
@@ -36,10 +37,12 @@
   <script defer src="/static/vendor/plotly.min.js"></script>
   <script defer src="/static/vendor/three.min.js"></script>
   <script defer src="/static/vendor/STLLoader.js"></script>
-  <script defer src="/static/js/app.js"></script>
+  <script defer src="/static/js/app.js?v=perf1"></script>
+  <script defer src="/static/js/liquid-platform.js?v=perf6"></script>
   <script defer src="/static/vendor/alpine.min.js"></script>
 </head>
-<body x-data="platform()" x-init="init()">
+<body x-data="platform()">
+  <div class="ambient" aria-hidden="true"><div id="photo-wallpaper"></div></div>
 
   <!-- ================= boot failure banner =================
        Deliberately outside Alpine's control (no x-show/x-cloak) so the
@@ -67,27 +70,29 @@
   </main>
 
   <!-- ================= Main app ================= -->
-  <div class="app-shell" x-show="user" x-cloak>
+  <div class="app-shell app" x-show="user" x-cloak>
+    <div class="workspace">
 
     <div class="titlebar">
       <img src="/static/img/favicon.png" alt="">
       <span class="name">Aero404 CFD Platform</span>
       <span class="spacer"></span>
       <span class="session" x-text="user && `${user.name} · ${user.role}`"></span>
+      <button type="button" @click="cycleGlassMode()" :aria-label="'Appearance: '+glassMode" x-text="glassMode"></button>
       <button @click="logout()">Log Out</button>
     </div>
 
-    <nav class="tabbar">
+    </div>
+    <nav class="tabbar sidebar" aria-label="Main navigation">
       <template x-for="item in tabs" :key="item.id">
         <button x-show="item.id!=='settings' || user?.role==='admin'"
-                :class="{active: tab === item.id}" @click="selectTab(item.id)">
-          <span class="icon" x-text="item.icon"></span>
+                :class="{active: tab === item.id}" :title="item.label" :aria-label="item.label" @click="selectTab(item.id)">
+          <span class="icon" x-html="item.icon"></span>
           <span x-text="item.label"></span>
         </button>
       </template>
     </nav>
-
-    <main class="page">
+    <main class="page workspace-content">
 
       <!-- ---------------- Case List ---------------- -->
       <section x-show="tab==='cases'" class="page" style="padding:0">
@@ -157,7 +162,7 @@
       </section>
 
       <!-- ---------------- Slices ---------------- -->
-      <section x-show="tab==='slices'" class="page" style="padding:0">
+      <section x-show="tab==='slices'" class="page slices-page" style="padding:0">
         <div class="panel-title wrap-title">
           <h2>Slices</h2>
           <div class="inline-sync">
@@ -279,16 +284,15 @@
       <section x-show="tab==='plots'" class="page" style="padding:0">
         <div class="panel-title wrap-title">
           <h2>Plots</h2>
-          <select x-model="selectedCsv" @change="drawPlots()" style="width:auto;min-width:220px">
-            <template x-for="f in csvFiles" :key="f"><option :value="f" x-text="f"></option></template>
-          </select>
           <button @click="loadCsvFiles()">↻ Refresh CSV List</button>
-          <span class="readonly-note">Main: <b x-text="caseLabel(mainCase)||'—'"></b> / Sub: <b x-text="caseLabel(subCase)||'—'"></b></span>
+          <button @click="selectTab('cases')">Choose cases</button>
         </div>
 
         <div class="compare-grid" :class="subCase ? 'dual' : 'single'" style="flex:1">
           <div class="compare-pane">
-            <div class="pane-head"><span class="role main">Main · <span x-text="caseLabel(mainCase)||'not selected'"></span></span></div>
+            <div class="pane-head"><span class="role main">Main · <span x-text="caseLabel(mainCase)||'not selected'"></span></span>
+              <select aria-label="Main monitor file" x-model="selectedCsvMain" @change="drawOnePlot('main','plot-main',mainCase)"><template x-for="f in csvFilesMain" :key="f"><option :value="f" x-text="f"></option></template></select>
+            </div>
             <div id="plot-main" class="plot-host"></div>
             <div class="series-list" x-show="plotSeriesNamesMain.length">
               <h4>Visible Series</h4>
@@ -301,7 +305,9 @@
             </div>
           </div>
           <div class="compare-pane" x-show="subCase" x-cloak>
-            <div class="pane-head"><span class="role sub">Sub · <span x-text="caseLabel(subCase)||'not selected'"></span></span></div>
+            <div class="pane-head"><span class="role sub">Sub · <span x-text="caseLabel(subCase)||'not selected'"></span></span>
+              <select aria-label="Sub monitor file" x-model="selectedCsvSub" @change="drawOnePlot('sub','plot-sub',subCase)"><template x-for="f in csvFilesSub" :key="f"><option :value="f" x-text="f"></option></template></select>
+            </div>
             <div id="plot-sub" class="plot-host"></div>
             <div class="series-list" x-show="plotSeriesNamesSub.length">
               <h4>Visible Series</h4>
@@ -476,12 +482,37 @@
         </div>
       </section>
 
+      <section x-show="tab==='gallery'" class="page gallery-page" style="padding:0" x-cloak>
+        <div class="panel-title"><h2>Gallery</h2></div>
+        <div class="gallery-layout">
+          <div class="gallery-stage" :style="{backgroundImage: galleryBackground()}"><h2>A different view of your workspace.</h2></div>
+          <div class="gallery-controls">
+            <h3>Fine-tune the glass</h3>
+            <p>Only the interface is styled. Scientific images and plot colors remain unchanged.</p>
+            <label>Background blur <span x-text="glassBlur+' px'"></span><input type="range" min="0" max="24" x-model.number="glassBlur" @input="applyGlass()"></label>
+            <label>Photo visibility <span x-text="glassStrength+'%'"></span><input type="range" min="20" max="100" x-model.number="glassStrength" @input="applyGlass()"></label>
+            <label>Appearance<select x-model="glassMode" @change="applyGlass()"><option value="smoke">Smoke</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+            <label><input type="checkbox" x-model="glassMotion" @change="applyGlass()"> Interface motion</label>
+            <label><input type="checkbox" x-model="glassEnabled" @change="applyGlass()"> Glass effects</label>
+            <label><input type="checkbox" x-model="dockPinned" @change="applyGlass()"> Pin navigation dock</label>
+          </div>
+        </div>
+        <h3>Your backgrounds</h3>
+        <div class="wallpaper-grid">
+          <template x-for="photo in glassPhotos" :key="photo.id"><button class="wallpaper-card" @click="chooseGlassPhoto(photo.id)" :disabled="user?.role!=='admin'" :aria-pressed="glassPhoto===photo.id"><span :style="{backgroundImage: 'url('+JSON.stringify(photo.url)+')'}"></span><b x-text="photo.name"></b></button></template>
+          <button class="upload-card" x-show="user?.role==='admin'" :disabled="glassUploadBusy" @click="$refs.glassPhotoInput.click()" x-text="glassUploadBusy?'Uploading…':'＋ Choose a photo'"></button>
+        </div>
+        <input hidden type="file" x-ref="glassPhotoInput" accept="image/jpeg,image/png,image/webp" @change="importGlassPhoto($event)">
+        <p class="readonly-note">Shared photos are saved in the platform data/wallpapers directory. Admins can upload or change the background for everyone. Appearance controls remain personal.</p>
+        <p class="error" role="alert" x-show="galleryError" x-text="galleryError"></p>
+      </section>
+
       <!-- ---------------- About ---------------- -->
       <section x-show="tab==='about'" class="page">
         <div class="about-card">
           <img src="/static/img/favicon.png">
           <h2>Aero404 CFD Platform</h2>
-          <p class="version-badge">Version 1.1</p>
+          <p class="version-badge">Version 1.0</p>
           <p>Web-based STAR-CCM+ job queue and CFD result viewer.</p>
           <p>FastAPI · Alpine.js · Plotly.js · three.js</p>
           <hr>
@@ -496,7 +527,7 @@
 
   <!-- ================= Add Case Modal ================= -->
   <div class="modal-backdrop" x-show="addOpen" x-cloak @keydown.escape.window="addOpen=false">
-    <form class="modal" @submit.prevent="createJob()">
+    <form class="modal add-case-modal" @submit.prevent="createJob()">
       <div class="panel-title">
         <h2>Add Case</h2>
         <button type="button" class="quiet" @click="addOpen=false">✕</button>
@@ -523,8 +554,12 @@
             <option value="all">All</option>
           </select>
         </label>
-        <label class="wide">Parasolid Upload
-          <input type="file" accept=".x_t" @change="newJob.file=$event.target.files[0]">
+        <label class="wide geometry-upload">Parasolid Upload
+          <span class="file-picker">
+            <input class="file-picker-input" type="file" accept=".x_t" aria-label="Choose Parasolid file" @change="newJob.file=$event.target.files[0]">
+            <span class="file-picker-button" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 15v5h16v-5"/></svg>Choose file</span>
+            <span class="file-picker-name" x-text="newJob.file?.name || 'No file selected'"></span>
+          </span>
         </label>
         <label class="wide">Note (optional)
           <textarea x-model="newJob.note" rows="2" placeholder="Free-text note, editable later from Job Session"></textarea>
@@ -647,29 +682,38 @@
        A short extra delay gives Alpine's async init and x-cloak removal a
        moment to finish before checking. -->
   <script defer>
-    setTimeout(function () {
+    // 慢網路（例如剛開新分頁、TLS 冷連線）光是 plotly.min.js 這個 4.5MB
+    // 的檔案就可能要好幾秒才載完，600ms 太短會誤判成「載入失敗」。
+    // 改成每 500ms 檢查一次，最多等 8 秒，真的等到那個時間還沒好才算失敗。
+    (function poll(elapsed) {
+      var ok = typeof platform === 'function' && typeof window.Alpine !== 'undefined';
+      if (ok) {
+        var loginVisible = document.querySelector('.login') && getComputedStyle(document.querySelector('.login')).display !== 'none';
+        var shellVisible = document.querySelector('.app-shell') && getComputedStyle(document.querySelector('.app-shell')).display !== 'none';
+        ok = loginVisible || shellVisible;
+      }
+      if (ok) return;
+
+      if (elapsed < 8000) {
+        setTimeout(function () { poll(elapsed + 500); }, 500);
+        return;
+      }
+
       var missing = [];
       if (typeof platform !== 'function') missing.push('app.js (platform function not defined)');
       if (typeof window.Alpine === 'undefined') missing.push('Alpine.js (window.Alpine not found)');
+      if (missing.length === 0) missing.push('Alpine loaded, but nothing rendered (x-data init may have failed)');
 
-      var loginVisible = document.querySelector('.login') && getComputedStyle(document.querySelector('.login')).display !== 'none';
-      var shellVisible = document.querySelector('.app-shell') && getComputedStyle(document.querySelector('.app-shell')).display !== 'none';
-      if (missing.length === 0 && !loginVisible && !shellVisible) {
-        missing.push('Alpine loaded, but nothing rendered (x-data init may have failed)');
+      var box = document.getElementById('boot-error');
+      var detail = document.getElementById('boot-error-detail');
+      var lines = ['Missing or failed after 8s:', ...missing];
+      if (window.__bootErrors && window.__bootErrors.length) {
+        lines.push('Failed to load:');
+        window.__bootErrors.forEach(function (src) { lines.push(' - ' + src); });
       }
-
-      if (missing.length > 0) {
-        var box = document.getElementById('boot-error');
-        var detail = document.getElementById('boot-error-detail');
-        var lines = ['Missing or failed:', ...missing];
-        if (window.__bootErrors && window.__bootErrors.length) {
-          lines.push('Failed to load:');
-          window.__bootErrors.forEach(function (src) { lines.push(' - ' + src); });
-        }
-        detail.innerHTML = lines.map(function (l) { return l.replace(/</g, '&lt;'); }).join('<br>');
-        box.style.display = 'flex';
-      }
-    }, 600);
+      detail.innerHTML = lines.map(function (l) { return l.replace(/</g, '&lt;'); }).join('<br>');
+      box.style.display = 'flex';
+    })(0);
   </script>
 
 </body>

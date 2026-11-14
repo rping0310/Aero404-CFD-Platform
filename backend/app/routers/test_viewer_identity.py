@@ -17,7 +17,7 @@ class ViewerIdentityTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name).resolve()
         for folder, value in (("Straight", "1"), ("Cornering", "2")):
-            case = self.root / folder / "TH12_001"
+            case = self.root / folder / "CASE_001"
             (case / "slice").mkdir(parents=True)
             (case / "Result.dat").write_text(f"mean_Cla = {value}\n")
             (case / "case_parameter.dat").write_text(f"marker = {value}\n")
@@ -34,7 +34,7 @@ class ViewerIdentityTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(viewer.router)
         app.dependency_overrides[current_user] = lambda: object()
-        self.client = TestClient(app)
+        self.client = TestClient(app, base_url="https://testserver")
 
     def tearDown(self):
         self.client.close()
@@ -48,14 +48,14 @@ class ViewerIdentityTest(unittest.TestCase):
 
     def test_same_name_all_data_sources(self):
         for folder, value in (("Straight", "1"), ("Cornering", "2")):
-            self.assertEqual(self.get(folder, "TH12_001", "/result").json()["mean_Cla"], value)
-            self.assertEqual(self.get(folder, "TH12_001", "/parameters").json()["marker"], value)
-            self.assertEqual(self.get(folder, "TH12_001", "/slice_types").json(), ["slice"])
-            self.assertEqual(self.get(folder, "TH12_001", "/slices/slice").json(), ["0.png"])
-            self.assertEqual(self.get(folder, "TH12_001", "/slice/slice/0").content, value.encode())
-            self.assertEqual(self.get(folder, "TH12_001", "/csv").json(), ["plot.csv"])
-            self.assertEqual(self.get(folder, "TH12_001", "/csv/plot.csv").json()["rows"][0][1], float(value))
-            self.assertEqual(self.get(folder, "TH12_001", "/stl").content, value.encode())
+            self.assertEqual(self.get(folder, "CASE_001", "/result").json()["mean_Cla"], value)
+            self.assertEqual(self.get(folder, "CASE_001", "/parameters").json()["marker"], value)
+            self.assertEqual(self.get(folder, "CASE_001", "/slice_types").json(), ["slice"])
+            self.assertEqual(self.get(folder, "CASE_001", "/slices/slice").json(), ["0.png"])
+            self.assertEqual(self.get(folder, "CASE_001", "/slice/slice/0").content, value.encode())
+            self.assertEqual(self.get(folder, "CASE_001", "/csv").json(), ["plot.csv"])
+            self.assertEqual(self.get(folder, "CASE_001", "/csv/plot.csv").json()["rows"][0][1], float(value))
+            self.assertEqual(self.get(folder, "CASE_001", "/stl").content, value.encode())
 
     def test_legacy_and_invalid_identity(self):
         self.assertEqual(self.client.get('/api/viewer/case/unique/slice_types').status_code, 200)

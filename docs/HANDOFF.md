@@ -129,7 +129,7 @@ template_folder_name: "template_CFD"  # 三個 type 共用同一版本
 entry_macro: "batch_run.java"                      # 執行入口，一支跑完全部
 
 uploaded_file_pattern: "TH1[123]_\\d+\\.x_t"
-uploaded_file_display_name: "Wing/Diffuser Package (TH11/TH12/TH13_XXX.x_t)"
+uploaded_file_display_name: "Wing/Diffuser Package (CASE_XXX.x_t)"
 max_upload_size_mb: 500
 
 status_poll_interval_sec: 10
@@ -238,7 +238,7 @@ check_can_overwrite(case_name):
 
 ```
 網站「新增 Case」表單：
-  1. 填 Case 名稱（例如 TH12_002）→ 會變成資料夾名和 .sim 檔名
+  1. 填 Case 名稱（例如 CASE_002）→ 會變成資料夾名和 .sim 檔名
   2. 選 Simulation Type（Straight / Yaw / Cornering）→ 決定資料夾路徑
      → case_parameter 裡的 simulation_type 欄位自動鎖定同步
   3. 上傳 TH1X_XXX.x_t（只有這一個檔案需要上傳，body.x_t / unsprung.x_t 在 template 裡）
@@ -253,12 +253,12 @@ check_can_overwrite(case_name):
 ```python
 # 對應實際的 terminal 操作：
 # cd ~/CFD_cloud_NFS/Straight
-# cp -r template_CFD TH12_002
-# cd TH12_002
-# mv template.sim TH12_002.sim
+# cp -r template_CFD CASE_002
+# cd CASE_002
+# mv template.sim CASE_002.sim
 # (放上傳的 parasolid)
 # (寫入 case_parameter.dat)
-# starccm+ -np 31 -batch batch_run.java TH12_002.sim
+# starccm+ -np 31 -batch batch_run.java CASE_002.sim
 
 1. 檢查 template 存在
 2. 檢查資料夾是否已存在（覆蓋保護）
@@ -288,8 +288,8 @@ check_can_overwrite(case_name):
 │   │   ├── solve.java
 │   │   └── postprocess.java
 │   │
-│   ├── TH12_001/                      ← case（由 workflow 建立）
-│   │   ├── TH12_001.sim
+│   ├── CASE_001/                      ← case（由 workflow 建立）
+│   │   ├── CASE_001.sim
 │   │   ├── body.x_t
 │   │   ├── unsprung.x_t
 │   │   ├── TH11_228.x_t              ← 使用者上傳的
@@ -300,7 +300,7 @@ check_can_overwrite(case_name):
 │   │   ├── Result.dat                 ← 結果
 │   │   ├── Residuals_final.csv
 │   │   └── ...
-│   └── TH12_002/
+│   └── CASE_002/
 │
 ├── Yaw/
 │   └── template_CFD/
@@ -317,8 +317,8 @@ check_can_overwrite(case_name):
 ```bash
 # Host server 透過 SSH 在 Remote server 執行：
 ssh -i ~/.ssh/id_ed25519 usera@192.0.2.20 \
-  "cd /home/usera/CFD_cloud_NFS/Straight/TH12_002 && \
-   nohup starccm+ -np 16 -batch batch_run.java TH12_002.sim \
+  "cd /home/usera/CFD_cloud_NFS/Straight/CASE_002 && \
+   nohup starccm+ -np 16 -batch batch_run.java CASE_002.sim \
    > workflow.log 2>&1 & echo \$! > run.pid"
 ```
 
@@ -538,11 +538,11 @@ frontend/
 ├────┬──────────┬────────┬──────┬──────┬────┤
 │ #  │ Name     │ Status │Cores │ By   │    │
 ├────┼──────────┼────────┼──────┼──────┼────┤
-│ 1  │ TH12_002 │SOLVING │ 31   │admin │Kill│
-│ 2  │ TH12_003 │SOLVING │ 31   │user_a │Kill│
-│ 3  │ TH12_004 │WAITING │ -    │user_b │ ↑↓ │
+│ 1  │ CASE_002 │SOLVING │ 31   │admin │Kill│
+│ 2  │ CASE_003 │SOLVING │ 31   │user_a │Kill│
+│ 3  │ CASE_004 │WAITING │ -    │user_b │ ↑↓ │
 ├────┼──────────┼────────┼──────┼──────┼────┤
-│ 4  │ TH12_001 │ DONE   │ 31   │admin │    │
+│ 4  │ CASE_001 │ DONE   │ 31   │admin │    │
 │ 5  │ TH11_999 │ FAILED │ 62   │user_a │    │
 └────┴──────────┴────────┴──────┴──────┴────┘
 ```
@@ -552,7 +552,7 @@ frontend/
 ┌───────────────────────────────────────────┐
 │ 新增 Case                                  │
 ├───────────────────────────────────────────┤
-│ Case 名稱: [TH12_002        ]              │
+│ Case 名稱: [CASE_002        ]              │
 │ Simulation Type: ○Straight ○Yaw ○Cornering│
 │ 上傳檔案: [選擇檔案...]                     │
 │                                            │

@@ -81,7 +81,7 @@ class IntegrationTest(unittest.TestCase):
 
         from fastapi.testclient import TestClient
         from app.main import app
-        cls.client_context = TestClient(app)
+        cls.client_context = TestClient(app, base_url="https://testserver")
         cls.client = cls.client_context.__enter__()
 
     @classmethod

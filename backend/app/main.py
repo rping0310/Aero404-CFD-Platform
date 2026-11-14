@@ -12,7 +12,7 @@ from .config import settings
 from .jobs.monitor import JobMonitor
 from .jobs.queue_manager import JobQueueManager
 from .jobs.real_runner import RealRunner
-from .routers import auth, jobs, servers, settings as settings_router, viewer
+from .routers import auth, jobs, servers, settings as settings_router, viewer, gallery
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = PROJECT_ROOT / "frontend"
@@ -31,12 +31,13 @@ async def lifespan(app: FastAPI):
     await task
 
 
-app = FastAPI(title="Aero404 CFD Platform", lifespan=lifespan)
+app = FastAPI(title="Aero404 CFD Platform", version="1.2", lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(servers.router)
 app.include_router(settings_router.router)
 app.include_router(viewer.router)
+app.include_router(gallery.router)
 app.mount("/static", StaticFiles(directory=FRONTEND / "static"), name="static")
 
 

@@ -2,12 +2,12 @@
 #
 # 對照實際操作：
 #   cd ~/CFD_cloud_NFS/Straight        (依 simulation_type 決定資料夾)
-#   cp -r template_CFD TH12_002
-#   cd TH12_002
-#   mv template.sim TH12_002.sim
+#   cp -r template_CFD CASE_002
+#   cd CASE_002
+#   mv template.sim CASE_002.sim
 #   (把上傳的 TH1X_XXX.x_t 放進來)
 #   (寫入 case_parameter.dat)
-#   starccm+ -np 31 -batch batch_run.java TH12_002.sim
+#   starccm+ -np 31 -batch batch_run.java CASE_002.sim
 #
 # 可用的變數（執行時由程式自動代入）：
 #   {{nfs_root}} {{sim_type_folder}} {{template_folder_name}} {{case_name}}

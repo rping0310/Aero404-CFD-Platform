@@ -95,16 +95,16 @@ def test_1_half_mode_scheduling():
     # ServerA: total=64, reserved=2 → max=62 → half=31
     # job1 先結束（3秒），job2 撐比較久（15秒），這樣才能觀察到
     # 「job1 結束、job3 補位、job2 全程沒受影響」這個中間狀態
-    runner = VariableSleepRunner(default_duration=3, overrides={"TH12_002": 15})
+    runner = VariableSleepRunner(default_duration=3, overrides={"CASE_002": 15})
     mgr = JobQueueManager(runner, STORAGE_PATH, WORK_DIR_ROOT)
 
-    j1 = mgr.add_job("TH12_001", "ServerA", CoreMode.HALF, "admin")
+    j1 = mgr.add_job("CASE_001", "ServerA", CoreMode.HALF, "admin")
     print_status(mgr, "新增第一個 half job")
     assert j1.status == JobStatus.SOLVING, "第一個 half job 應該立刻開始"
     assert j1.cores_allocated == 31, f"62 的一半應該是 31，實際是 {j1.cores_allocated}"
     print(f"  ✅ Job1 立刻開始，cores={j1.cores_allocated}（預期 31）")
 
-    j2 = mgr.add_job("TH12_002", "ServerA", CoreMode.HALF, "user_a")
+    j2 = mgr.add_job("CASE_002", "ServerA", CoreMode.HALF, "user_a")
     print_status(mgr, "新增第二個 half job")
     assert j2.status == JobStatus.SOLVING, "還有剩餘核心正好等於固定半數，第二個 half job 也該立刻開始"
     assert j2.cores_allocated == 31, f"half 是固定值，應該也是 31，實際是 {j2.cores_allocated}"
@@ -113,7 +113,7 @@ def test_1_half_mode_scheduling():
     print(f"\n  目前 ServerA used_cores={mgr.used_cores('ServerA')}, available={mgr.available_cores('ServerA')}")
     assert mgr.available_cores("ServerA") == 0, "兩個 half job 應該正好把 62 顆吃滿"
 
-    j3 = mgr.add_job("TH12_003", "ServerA", CoreMode.HALF, "user_b")
+    j3 = mgr.add_job("CASE_003", "ServerA", CoreMode.HALF, "user_b")
     print_status(mgr, "兩個 half 都在跑時，新增第三個 half job")
     assert j3.status == JobStatus.WAITING, "沒有剩餘核心可以塞進固定半數，第三個該進 WAITING"
     print("  ✅ Job3 正確進入 WAITING（62 顆已滿）")
@@ -144,19 +144,19 @@ def test_2_all_mode_waits():
     print("========================================")
     reset_test_dir()
 
-    runner = VariableSleepRunner(default_duration=4, overrides={"TH12_010": 2, "TH12_012": 10})
+    runner = VariableSleepRunner(default_duration=4, overrides={"CASE_010": 2, "CASE_012": 10})
     mgr = JobQueueManager(runner, STORAGE_PATH, WORK_DIR_ROOT)
 
-    j1 = mgr.add_job("TH12_010", "ServerA", CoreMode.HALF, "admin")
+    j1 = mgr.add_job("CASE_010", "ServerA", CoreMode.HALF, "admin")
     assert j1.status == JobStatus.SOLVING
     print(f"  Job1 (half) 開始跑，cores={j1.cores_allocated}")
 
-    j2 = mgr.add_job("TH12_011", "ServerA", CoreMode.ALL, "user_a")
+    j2 = mgr.add_job("CASE_011", "ServerA", CoreMode.ALL, "user_a")
     print_status(mgr, "有 job1 在跑時新增 all job")
     assert j2.status == JobStatus.WAITING, "all 模式在有其他 job 跑時應該進 WAITING"
     print("  ✅ all 模式正確卡在 WAITING（因為 ServerA 上還有 job1 在跑）")
 
-    j3 = mgr.add_job("TH12_012", "ServerA", CoreMode.HALF, "user_b")
+    j3 = mgr.add_job("CASE_012", "ServerA", CoreMode.HALF, "user_b")
     print_status(mgr, "同時新增第三個 half job（測試不會被卡住的 all job 擋住）")
     assert j3.status == JobStatus.SOLVING, "half job 不該被排在前面的 all job 擋住（跳過去執行）"
     assert j3.cores_allocated == 31, "第二個 half 一樣拿固定的 31，正好把 62 顆吃滿"
@@ -194,12 +194,12 @@ def test_3_two_and_two_refill():
     runner = FakeSleepRunner(duration_sec=3)
     mgr = JobQueueManager(runner, STORAGE_PATH, WORK_DIR_ROOT)
 
-    j1 = mgr.add_job("TH12_020", "ServerB", CoreMode.ALL, "admin")
+    j1 = mgr.add_job("CASE_020", "ServerB", CoreMode.ALL, "admin")
     assert j1.status == JobStatus.SOLVING
     print(f"  Job1 (all) 開始跑，cores={j1.cores_allocated}（ServerB total=32, reserved=4 → 28）")
     assert j1.cores_allocated == 28
 
-    j2 = mgr.add_job("TH12_021", "ServerB", CoreMode.ALL, "user_a")
+    j2 = mgr.add_job("CASE_021", "ServerB", CoreMode.ALL, "user_a")
     assert j2.status == JobStatus.WAITING
     print("  Job2 (all) 進 WAITING，等 job1 結束")
 
@@ -232,10 +232,10 @@ def test_4_overwrite_protection():
     assert allowed is True and reason == ""
     print(f"  ✅ 全新名稱：允許，無警告")
 
-    j1 = mgr.add_job("TH12_030", "ServerA", CoreMode.HALF, "admin")
+    j1 = mgr.add_job("CASE_030", "ServerA", CoreMode.HALF, "admin")
     assert j1.status == JobStatus.SOLVING
 
-    allowed, reason = mgr.check_can_overwrite("TH12_030")
+    allowed, reason = mgr.check_can_overwrite("CASE_030")
     assert allowed is False
     print(f"  ✅ SOLVING 中的 case：禁止覆蓋 → {reason}")
 
@@ -244,7 +244,7 @@ def test_4_overwrite_protection():
     assert ok, "kill 之後 poll 應該偵測到 process 死亡並標記 FAILED"
     print(f"  Job1 被 kill 後狀態：{mgr.get_job(j1.id).status.value}, killed={mgr.get_job(j1.id).killed}")
 
-    allowed, reason = mgr.check_can_overwrite("TH12_030")
+    allowed, reason = mgr.check_can_overwrite("CASE_030")
     assert allowed is True
     print(f"  ✅ FAILED（已被 kill）的 case：允許覆蓋，但有警告 → {reason}")
 
@@ -258,8 +258,8 @@ def test_5_persistence_across_restart():
     runner1 = FakeSleepRunner(duration_sec=8)
     mgr1 = JobQueueManager(runner1, STORAGE_PATH, WORK_DIR_ROOT)
 
-    j1 = mgr1.add_job("TH12_040", "ServerA", CoreMode.HALF, "admin")
-    j2 = mgr1.add_job("TH12_041", "ServerA", CoreMode.ALL, "user_a")  # 會卡 WAITING
+    j1 = mgr1.add_job("CASE_040", "ServerA", CoreMode.HALF, "admin")
+    j2 = mgr1.add_job("CASE_041", "ServerA", CoreMode.ALL, "user_a")  # 會卡 WAITING
     print_status(mgr1, "重啟前")
     assert j1.status == JobStatus.SOLVING
     assert j2.status == JobStatus.WAITING
@@ -305,7 +305,7 @@ def test_6_start_failure_does_not_crash_and_marks_failed():
     mgr = JobQueueManager(runner, STORAGE_PATH, WORK_DIR_ROOT)
 
     # add_job 本身不應該拋出例外
-    job = mgr.add_job("TH12_FAIL", "ServerA", CoreMode.HALF, "admin")
+    job = mgr.add_job("CASE_FAIL", "ServerA", CoreMode.HALF, "admin")
 
     assert job.status == JobStatus.FAILED, f"啟動失敗應該直接標記 FAILED，實際是 {job.status.value}"
     assert job.error_message and "Connection refused" in job.error_message, \
@@ -316,7 +316,7 @@ def test_6_start_failure_does_not_crash_and_marks_failed():
     # 這個失敗的 job 不該佔用核心，後面的 job 要能正常排到
     assert mgr.used_cores("ServerA") == 0, "啟動失敗的 job 不該佔用核心"
 
-    job2 = mgr.add_job("TH12_AFTER_FAIL", "ServerA", CoreMode.HALF, "admin")
+    job2 = mgr.add_job("CASE_AFTER_FAIL", "ServerA", CoreMode.HALF, "admin")
     # ServerA 用的還是 BrokenRunner，這個也會失敗，但重點是驗證
     # 「不會被前一個失敗卡住、也不會崩潰」
     assert job2.status == JobStatus.FAILED

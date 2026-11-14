@@ -98,7 +98,7 @@ def test_1_normal_case_creation():
     uploaded.write_text("FAKE_PARASOLID")
 
     result = wf.prepare_case(
-        case_name="TH12_002",
+        case_name="CASE_002",
         simulation_type=1,
         server_name="ServerA",
         uploaded_file_path=uploaded,
@@ -117,7 +117,7 @@ def test_1_normal_case_creation():
 
     # 驗證資料夾結構
     assert case_folder.exists(), "Case 資料夾應該存在"
-    assert (case_folder / "TH12_002.sim").exists(), ".sim 檔案應該被 rename"
+    assert (case_folder / "CASE_002.sim").exists(), ".sim 檔案應該被 rename"
     assert not (case_folder / "template.sim").exists(), "原始 .sim 檔名應該不存在了"
     assert (case_folder / "body.x_t").exists(), "body.x_t 應該被複製過來"
     assert (case_folder / "unsprung.x_t").exists(), "unsprung.x_t 應該被複製過來"
@@ -134,7 +134,7 @@ def test_1_normal_case_creation():
     # 驗證指令模板
     assert "{{cores}}" in result.command_template, "指令模板應該包含 {{cores}} 佔位符"
     assert settings.get_app_settings()["entry_macro"] in result.command_template
-    assert "TH12_002.sim" in result.command_template
+    assert "CASE_002.sim" in result.command_template
     print(f"  command_template: {result.command_template}")
 
     print("  ✅ 正常建立 case，所有檔案都到位")
@@ -151,7 +151,7 @@ def test_2_folder_exists_warning():
 
     # 第一次建（成功）
     result1 = wf.prepare_case(
-        case_name="TH12_003",
+        case_name="CASE_003",
         simulation_type=2,
         server_name="ServerA",
         uploaded_file_path=None,
@@ -163,7 +163,7 @@ def test_2_folder_exists_warning():
 
     # 第二次建（同名，不 force）→ 應該回傳 FOLDER_EXISTS
     result2 = wf.prepare_case(
-        case_name="TH12_003",
+        case_name="CASE_003",
         simulation_type=2,
         server_name="ServerA",
         uploaded_file_path=None,
@@ -177,7 +177,7 @@ def test_2_folder_exists_warning():
 
     # 第三次建（同名，force=True）→ 應該覆蓋成功
     result3 = wf.prepare_case(
-        case_name="TH12_003",
+        case_name="CASE_003",
         simulation_type=2,
         server_name="ServerA",
         uploaded_file_path=None,
@@ -206,7 +206,7 @@ def test_3_template_not_found():
         shutil.rmtree(bad_template)
 
     result = wf.prepare_case(
-        case_name="TH12_004",
+        case_name="CASE_004",
         simulation_type=3,
         server_name="ServerA",
         uploaded_file_path=None,
@@ -228,7 +228,7 @@ def test_4_filename_validation():
     wf = WorkflowExecutor()
 
     assert wf.validate_uploaded_filename("TH11_999.x_t"), "TH11_999.x_t 應該合法"
-    assert wf.validate_uploaded_filename("TH12_001.x_t"), "TH12_001.x_t 應該合法"
+    assert wf.validate_uploaded_filename("CASE_001.x_t"), "CASE_001.x_t 應該合法"
     assert wf.validate_uploaded_filename("TH13_500.x_t"), "TH13_500.x_t 應該合法"
     assert not wf.validate_uploaded_filename("body.x_t"), "body.x_t 不符合 TH1X 格式"
     assert not wf.validate_uploaded_filename("random.stl"), "random.stl 不符合"
@@ -312,7 +312,7 @@ def test_6_remote_server_uses_host_nfs_path_for_file_ops():
     try:
         wf = WorkflowExecutor()
         result = wf.prepare_case(
-            case_name="TH12_REMOTE_TEST",
+            case_name="CASE_REMOTE_TEST",
             simulation_type=1,
             server_name="RemoteMachine",  # 選的是遠端機器
             uploaded_file_path=None,
@@ -323,19 +323,19 @@ def test_6_remote_server_uses_host_nfs_path_for_file_ops():
         assert result.ok, f"應該要成功，卻失敗了: {result.error}"
 
         # 檔案應該真的被寫在 host 路徑下
-        host_case_folder = host_nfs / "Straight" / "TH12_REMOTE_TEST"
+        host_case_folder = host_nfs / "Straight" / "CASE_REMOTE_TEST"
         assert host_case_folder.exists(), f"檔案應該被複製到 host 路徑: {host_case_folder}"
-        assert (host_case_folder / "TH12_REMOTE_TEST.sim").exists()
+        assert (host_case_folder / "CASE_REMOTE_TEST.sim").exists()
         assert (host_case_folder / "case_parameter.dat").exists()
         print(f"  ✅ 檔案正確寫在 host 路徑: {host_case_folder}")
 
         # remote_nfs 底下不應該有任何東西被創建（host 完全沒有能力寫入那個路徑的實體檔案）
-        assert not (remote_nfs / "Straight" / "TH12_REMOTE_TEST").exists(), \
+        assert not (remote_nfs / "Straight" / "CASE_REMOTE_TEST").exists(), \
             "不應該在 remote_nfs 路徑下真的建立檔案（那是給 SSH 用的邏輯路徑，不是本機路徑）"
         print(f"  ✅ remote_nfs 路徑下沒有被誤寫入任何本機檔案")
 
         # 回傳的 case_folder（會變成 job.work_dir，給 SSH cd 用）要是「目標」視角
-        expected_remote_path = str(remote_nfs / "Straight" / "TH12_REMOTE_TEST")
+        expected_remote_path = str(remote_nfs / "Straight" / "CASE_REMOTE_TEST")
         assert result.case_folder == expected_remote_path, (
             f"回傳的 case_folder 應該是目標 server 視角的路徑，"
             f"預期 {expected_remote_path}，實際 {result.case_folder}"

@@ -64,7 +64,7 @@ class FrontendAssetsTest(unittest.TestCase):
         (data / "app_settings.yaml").write_text(yaml.safe_dump(app_settings, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
         # 建立一個「已經跑完」的假 case，資料結構完全模擬 postprocess.java 的實際輸出
-        case_folder = nfs_root / "Straight" / "TH12_DEMO"
+        case_folder = nfs_root / "Straight" / "CASE_DEMO"
         case_folder.mkdir(parents=True)
 
         (case_folder / "Result.dat").write_text(
@@ -114,7 +114,7 @@ class FrontendAssetsTest(unittest.TestCase):
         os.environ["CFD_PLATFORM_DATA_DIR"] = str(data)
         from fastapi.testclient import TestClient
         from app.main import app
-        cls.client_context = TestClient(app)
+        cls.client_context = TestClient(app, base_url="https://testserver")
         cls.client = cls.client_context.__enter__()
         cls.client.post("/api/login", json={"name": "admin", "password": "changeme"})
 
@@ -148,7 +148,7 @@ class FrontendAssetsTest(unittest.TestCase):
         # app.js loadCases() 需要這些欄位
         for field in ("name", "simulation_type", "folder", "result", "modified_at"):
             self.assertIn(field, case)
-        self.assertEqual(case["name"], "TH12_DEMO")
+        self.assertEqual(case["name"], "CASE_DEMO")
         self.assertEqual(case["result"]["mean_Cl/Cd"], "2.4067")
         # 驗證 humanizeKey 邏輯會用到的欄位確實存在且順序符合 postprocess.java 寫入順序
         keys = list(case["result"].keys())
@@ -158,13 +158,13 @@ class FrontendAssetsTest(unittest.TestCase):
 
     def test_slices_endpoint_matches_frontend_expectations(self):
         c = self.client
-        r = c.get("/api/viewer/case/TH12_DEMO/slices/x%20direction%20velocity")
+        r = c.get("/api/viewer/case/CASE_DEMO/slices/x%20direction%20velocity")
         self.assertEqual(r.status_code, 200)
         names = r.json()
         self.assertEqual(len(names), 3, "app.js 用陣列長度算 sliceFilesMain.length")
 
         # app.js sliceUrl() 组的 URL 格式
-        r = c.get("/api/viewer/case/TH12_DEMO/slice/x%20direction%20velocity/0")
+        r = c.get("/api/viewer/case/CASE_DEMO/slice/x%20direction%20velocity/0")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.headers["content-type"], "image/png")
         print(f"  ✅ Slices API 正確回傳 {len(names)} 張圖片，單張圖片取得成功")
@@ -176,7 +176,7 @@ class FrontendAssetsTest(unittest.TestCase):
         不能寫死固定的六個名稱清單。
         """
         c = self.client
-        r = c.get("/api/viewer/case/TH12_DEMO/slice_types")
+        r = c.get("/api/viewer/case/CASE_DEMO/slice_types")
         self.assertEqual(r.status_code, 200)
         types = r.json()
         self.assertIn("x direction velocity", types, "有圖片的資料夾要出現")
@@ -185,13 +185,13 @@ class FrontendAssetsTest(unittest.TestCase):
 
     def test_csv_endpoint_matches_plotly_trace_format(self):
         c = self.client
-        r = c.get("/api/viewer/case/TH12_DEMO/csv")
+        r = c.get("/api/viewer/case/CASE_DEMO/csv")
         self.assertEqual(r.status_code, 200)
         files = r.json()
         self.assertIn("Residuals_0000.000.csv", files)
         self.assertIn("DF_0000.000.csv", files)
 
-        r = c.get("/api/viewer/case/TH12_DEMO/csv/Residuals_0000.000.csv")
+        r = c.get("/api/viewer/case/CASE_DEMO/csv/Residuals_0000.000.csv")
         data = r.json()
         # app.js drawOnePlot() 直接用 d.columns / d.rows / d.log_scale
         self.assertIn("columns", data)
@@ -202,14 +202,14 @@ class FrontendAssetsTest(unittest.TestCase):
         self.assertEqual(len(data["rows"]), 3)
         self.assertEqual(data["rows"][0], [1.0, 0.114, 0.038])
 
-        r = c.get("/api/viewer/case/TH12_DEMO/csv/DF_0000.000.csv")
+        r = c.get("/api/viewer/case/CASE_DEMO/csv/DF_0000.000.csv")
         data2 = r.json()
         self.assertFalse(data2["log_scale"], "DF 檔名應該被判定為 linear scale")
         print(f"  ✅ CSV API 格式正確：columns={data['columns']}, log_scale(Residuals)={data['log_scale']}, log_scale(DF)={data2['log_scale']}")
 
     def test_stl_endpoint_returns_parseable_binary(self):
         c = self.client
-        r = c.get("/api/viewer/case/TH12_DEMO/stl")
+        r = c.get("/api/viewer/case/CASE_DEMO/stl")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.headers["content-type"], "model/stl")
         body = r.content
@@ -221,14 +221,14 @@ class FrontendAssetsTest(unittest.TestCase):
 
     def test_result_endpoint_for_single_case(self):
         c = self.client
-        r = c.get("/api/viewer/case/TH12_DEMO/result")
+        r = c.get("/api/viewer/case/CASE_DEMO/result")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["mean_FW_DF"], "50.6073")
         print("  ✅ 單一 case 的 Result.dat 端點正常")
 
     def test_parameters_endpoint_for_single_case(self):
         c = self.client
-        r = c.get("/api/viewer/case/TH12_DEMO/parameters")
+        r = c.get("/api/viewer/case/CASE_DEMO/parameters")
         self.assertEqual(r.status_code, 200)
         params = r.json()
         self.assertIn("simulation_type", params)
@@ -263,21 +263,24 @@ class FrontendAssetsTest(unittest.TestCase):
 
         import re
         script_srcs = re.findall(r'<script[^>]*\bsrc="([^"]+)"', html)
+        script_paths = [src.split('?', 1)[0] for src in script_srcs]
         self.assertEqual(
-            script_srcs,
+            script_paths,
             [
                 "/static/vendor/plotly.min.js",
                 "/static/vendor/three.min.js",
                 "/static/vendor/STLLoader.js",
                 "/static/js/app.js",
+                "/static/js/liquid-platform.js",
                 "/static/vendor/alpine.min.js",
             ],
             "script 載入順序不對，可能重現黑畫面 bug",
         )
 
-        app_js_index = script_srcs.index("/static/js/app.js")
-        alpine_index = script_srcs.index("/static/vendor/alpine.min.js")
+        app_js_index = script_paths.index("/static/js/app.js")
+        alpine_index = script_paths.index("/static/vendor/alpine.min.js")
         self.assertLess(app_js_index, alpine_index, "app.js（定義 platform）必須排在 Alpine 前面")
+        self.assertLess(script_paths.index("/static/js/liquid-platform.js"), alpine_index)
 
         three_index = script_srcs.index("/static/vendor/three.min.js")
         stl_index = script_srcs.index("/static/vendor/STLLoader.js")

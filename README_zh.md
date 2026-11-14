@@ -1,5 +1,16 @@
 # Aero404 CFD Platform
 
+## v1.2 — Liquid Glass
+
+本版以正式伺服器的現行程式為來源，包含已部署的玻璃介面與效能改善，
+不是以本地原型覆蓋。詳細內容見[版本說明](docs/RELEASE_v1.2.md)。
+
+- Smoke／Light／Dark 外觀、玻璃與動態效果開關、共用桌布圖庫。
+- 工作列預設釘選；取消釘選後浮動覆蓋，不因展開／收合改變版面寬度。
+- 按需更新折射、閒置停畫、避免過期擷取與收合殘影。
+- 每張曲線圖獨立選擇 CSV，改善案例選取對比。
+- 不包含正式帳號、密碼、主機設定、登入紀錄或模擬資料。
+
 **語言 / Language:** [English](README.md) · 繁體中文
 
 多使用者 **STAR-CCM+ 排程平台 + CFD 結果瀏覽器**（Web 版）。
@@ -173,7 +184,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 然後用 `https://<主機>:6200` 開啟（埠號見 `nginx.conf.example`；自簽憑證瀏覽器會警告，確認後繼續）。uvicorn 維持只聽 `127.0.0.1:8080`。
 
-**B. 僅限內網、純 HTTP 測試：** 在 `data/app_settings.yaml` 設 `cookie_secure: false`。不要在不受信任的網路使用。
+**B. 測試：** 使用 HTTPS，或瀏覽器允許的 localhost 環境。此伺服器來源版本固定設定 Secure 登入 Cookie，
+不支援 `cookie_secure: false`。自動 API 測試使用 HTTPS 測試網址，不開放公開監聽埠。
 
 ## 8. Log 檢視與自動判定失敗
 

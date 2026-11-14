@@ -1,5 +1,17 @@
 # Aero404 CFD Platform
 
+## v1.2 — Liquid Glass
+
+This release packages the running server's application source, including its
+Liquid Glass interface and deployed performance improvements. It is not built
+from the local development prototype. See [release notes](docs/RELEASE_v1.2.md).
+
+- Smoke / Light / Dark appearance, optional glass and motion, shared wallpaper gallery.
+- Pinned navigation by default; unpinned navigation overlays content without resizing it.
+- Demand-driven refraction capture, idle rendering suspension and stale-capture protection.
+- Independent CSV selection per plot and improved selected-case contrast.
+- Runtime accounts, passwords, host configuration, logs and simulation data are excluded.
+
 **Language:** English · [繁體中文](README_zh.md)
 
 A multi-user **STAR-CCM+ job queue and CFD result viewer** for the web. It queues simulations, runs them locally or over SSH on several servers, and lets your team browse the results — all from a small FastAPI service.
@@ -172,7 +184,9 @@ sudo nginx -t && sudo systemctl reload nginx
 
 Then open `https://<host>:6200` (the port is set in `nginx.conf.example`; with a self-signed certificate your browser will warn once). Keep uvicorn listening on `127.0.0.1:8080` only.
 
-**B. Trusted LAN only, plain HTTP for testing:** set `cookie_secure: false` in `data/app_settings.yaml`. Do not do this on an untrusted network.
+**B. Testing:** use HTTPS, or browser localhost where supported. This server-derived
+release always sets a Secure login cookie; `cookie_secure: false` is not supported.
+Automated API tests use an HTTPS test-client URL without opening a public listener.
 
 ## 8. Log viewer and automatic failure detection
 

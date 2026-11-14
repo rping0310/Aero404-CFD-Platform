@@ -7,3 +7,17 @@ __pycache__/
 *.bak*
 *.log
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.wfw
+*.jsonl
+*.sim
+*.x_t
+*.version-backup-*
+node_modules/
+playwright-report/
+test-results/
